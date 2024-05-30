@@ -1,4 +1,4 @@
-# Termux ROM and Xbox 360 Conversion Scripts
+# Termux - ROM Conversion Scripts
 
 This repository contains a collection of bash scripts designed for converting various game files on your Android or ChromeOS device using Termux. These scripts help manage and optimize your ROMs and Xbox 360 files efficiently.
 
