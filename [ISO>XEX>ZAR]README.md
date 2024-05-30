@@ -30,7 +30,7 @@ This step allows Termux to access your phone's storage, which is necessary for t
      ```
 
 4. **Download and Compile Tools:**
-   - Type these commands in Termux:
+   - Type these commands in Termux, one by one:
      ```
      wget https://github.com/XboxDev/extract-xiso/archive/refs/heads/master.zip
      unzip master.zip
