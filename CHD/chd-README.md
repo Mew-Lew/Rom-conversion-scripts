@@ -4,9 +4,9 @@ Use the scripts as follows:
 
 Refer to the Redump database (http://redump.org/) to determine the original media type
 
--**For PS2**:
- - CD: use `createcd`
- - DVD: use `createdvd`
+- **For PS2**:
+  - CD: use `createcd`
+  - DVD: use `createdvd`
 
 - **PSP**: `createdvd`
 - **Dreamcast (GDI or BIN/CUE)**: `createcd`
