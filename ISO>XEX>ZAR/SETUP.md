@@ -29,7 +29,7 @@ This step allows Termux to access your phone's storage, which is necessary for t
      apt install wget unzip cmake zarchive-tools build-essential
      ```
 
-4. **Download and Compile Tools:**
+4. **Download and Compile extract-xiso (See markdown for license):**
    - Type these commands in Termux, one by one:
      ```
      wget https://github.com/XboxDev/extract-xiso/archive/refs/heads/master.zip
