@@ -38,7 +38,7 @@ Ensure you have separate input/output paths for each script:
 - They can be archived in .zip format.
 
 ### Notes: 
-**Both scripts can:**
+- **Both scripts can:**
   - Look inside folders in the input path.
   - Unzip .zip archives to a temporary folder, compress to CHD, and delete the temporary folder.
   - Process loose BIN/CUE and ISO files.
