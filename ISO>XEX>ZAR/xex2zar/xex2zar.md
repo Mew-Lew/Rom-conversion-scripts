@@ -1,8 +1,15 @@
+## Xbox 360 XEX to ZAR Converter
+
 Before running the script, ensure to update the input and output paths located at the beginning of the script.
 
-This script is designed to convert Xbox 360 xex folders to zar format while keeping the original xex folder intact.
+### Prerequisites
+- Update the input and output paths before running the script.
+- Ensure double the storage space of the XEX files is available.
 
-You'll need to have double the storage space of the xex files available. Here's some advice:
+### Overview
+This script converts Xbox 360 XEX folders to ZAR format while preserving the original XEX folder.
 
-- Make sure you have enough storage space: Allocate at least twice the size of the xex folder to accommodate the original xex files, the generated zar file, and temporary files.
-- Plan for storage: If storage space is limited, consider converting one xex folder at a time to manage space effectively.
+- The original XEX folder remains intact after conversion.
+- Ensure sufficient storage space is available:
+  - Allocate at least twice the size of the XEX folder to accommodate the original XEX folder and the generated ZAR file.
+  - If storage space is limited, consider converting one XEX folder at a time to manage space effectively.
