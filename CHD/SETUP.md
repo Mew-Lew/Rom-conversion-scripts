@@ -29,7 +29,7 @@ termux-setup-storage
      pkg install proot-distro
      proot-distro install ubuntu
      proot-distro login ubuntu
-     apt update && apt upgrade (Press Y at prompts)
+     apt update && apt upgrade
      apt install mame-tools unzip
      ```
 * **Input Y at every prompt and type your geographical information when prompted.**
