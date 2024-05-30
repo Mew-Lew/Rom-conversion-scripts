@@ -1,5 +1,3 @@
-# This script requires mame-tools unzip nano
-
 #!/bin/bash
 
 # Directory containing input files for createdvd (ISO and BIN/CUE)
