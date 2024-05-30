@@ -20,6 +20,7 @@
 9. Then, input:
    ```apt install mame-tools ls unzip```
    Input 'Y' to install.
+   Input your geographic area and time zone when prompted. For example, type 'Europe' and 'London'.
 
 There are two bash scripts: one for CDs (`chdcreatecd.sh`) and one for DVDs (`chdcreatedvd.sh`).
 
