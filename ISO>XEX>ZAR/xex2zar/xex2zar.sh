@@ -1,5 +1,3 @@
-# This script requires wget unzip cmake zarchive-tools build-essential
-
 #!/bin/bash
 
 input_path="CHANGE/ME/INPUT/PATH"
