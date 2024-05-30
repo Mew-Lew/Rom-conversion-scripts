@@ -1,32 +1,25 @@
 1. **Download Termux** from F-Droid.
-2. Open the app and type:
-   ```
-   pkg update && pkg upgrade
-   ```Press 'Y' to accept at each prompt.
-3. Once it's done, type:
-   ```
-   termux-setup-storage
-   ```Grant storage access.
-4. After that, type:
-   ```
-   pkg install proot-distro
-   ```Press 'Y' to install.
-5. Once installed, type:
-   ```
-   proot-distro install ubuntu
-   ```This will take a few minutes.
-6. When it's done, type:
-   ```
-   proot-distro login ubuntu
-   ```You'll enter Ubuntu when you see `root@localhost` in your console.
-7. Type:
-   ```
-   apt update && apt upgrade
-   ```Press 'Y' to update.
-8. Then, type:
-   ```
-   apt install mame-tools ls unzip
-   ```Press 'Y' to install.
+2. Open the app and input:
+   ```pkg update && pkg upgrade```
+   Input 'Y' to accept at each prompt.
+4. Once it's done, input:
+   ```termux-setup-storage```
+   Press allow to grant storage access.
+5. After that, input:
+   ```pkg install proot-distro```
+   Input 'Y' to install.
+6. Once installed, type:
+   ```proot-distro install ubuntu```
+   This will take a few minutes.
+7. When it's done, input:
+   ```proot-distro login ubuntu```
+   You'll enter Ubuntu when you see `root@localhost` on your console.
+8. Input:
+   ```apt update && apt upgrade```
+   Input 'Y' to update.
+9. Then, input:
+   ```apt install mame-tools ls unzip```
+   Input 'Y' to install.
 
 There are two bash scripts: one for CDs (`chdcreatecd.sh`) and one for DVDs (`chdcreatedvd.sh`).
 
