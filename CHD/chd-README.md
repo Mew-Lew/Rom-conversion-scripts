@@ -37,11 +37,10 @@ Ensure you have separate input/output paths for each script:
 - They can be inside a folder in the input path.
 - They can be archived in .zip format.
 
-**Both scripts can:**
-- Look inside folders in the input path.
-- Unzip .zip archives to a temporary folder, compress to CHD, and delete the temporary folder.
-- Process loose BIN/CUE and ISO files.
-
 ### Notes: 
+**Both scripts can:**
+  - Look inside folders in the input path.
+  - Unzip .zip archives to a temporary folder, compress to CHD, and delete the temporary folder.
+  - Process loose BIN/CUE and ISO files.
 - Only .zip archives are supported.
 - Depending on your device this could be quite slow. For example, on my Pixel 7 it takes about 5 minutes to compress one 5GB rom. Your phone will also be very slow while it is running, this is normal, just put your phone down and let it run.
