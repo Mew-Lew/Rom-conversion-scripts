@@ -1,27 +1,5 @@
 # This script requires wget unzip cmake zarchive-tools build-essential
 
-#1 Download the extract-xiso source code from GitHub
-# wget https://github.com/XboxDev/extract-xiso/archive/refs/heads/master.zip
-
-#2 Unzip the downloaded file
-# unzip master.zip
-
-#3 Navigate to the source directory
-# cd extract-xiso-master
-
-#4 Create a build directory and navigate to the build directory
-# mkdir build
-# cd build
-
-#5 Configure the project
-# cmake ..
-
-#6 Compile the project
-# make
-
-#7 Install the compiled project
-# make install
-
 #!/bin/bash
 
 # Input and output paths
