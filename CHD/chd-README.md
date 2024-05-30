@@ -2,7 +2,7 @@ There are two bash scripts: one for CDs (`chdcreatecd.sh`) and one for DVDs (`ch
 
 Use the scripts as follows:
 
-Refer to the Redump database (http://redump.org/) to determine the original media type
+Refer to the Redump database for Ps2 roms (http://redump.org/) to determine the original media type
 
 - **For PS2**:
   - CD: use `createcd`
@@ -37,7 +37,7 @@ Ensure you have separate input/output paths for each script:
 - They can be inside a folder in the input path.
 - They can be archived in .zip format.
 
-However both scripts can:
+**Both scripts can:**
 - Look inside folders in the input path.
 - Unzip .zip archives to a temporary folder, compress to CHD, and delete the temporary folder.
 - Process loose BIN/CUE and ISO files.
