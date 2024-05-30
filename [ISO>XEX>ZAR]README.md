@@ -11,12 +11,12 @@ This tool lets you convert ISO files for Xbox 360 on your phone.
 1. **Update package lists:**
 
    - Open Termux and type:
-     ``` pkg update && pkg upgrade```
+     ```pkg update && pkg upgrade```
    - **Press Y at every prompt** that appears.
 
 2. **Grant Termux Storage Access:**
 This step allows Termux to access your phone's storage, which is necessary for the tool to function.
-```   termux-setup-storage```
+```termux-setup-storage```
 * **When prompted, tap "Allow" to grant Termux storage access.**
 
 3. **Install tools:**
@@ -67,6 +67,6 @@ This step allows Termux to access your phone's storage, which is necessary for t
 * The README file attached includes steps for easier copy and pasting. Please read the advice at the top of each script.
 
 * When you want to run the script again in future
-```   proot-distro login ubuntu```
+```proot-distro login ubuntu```
 * Then run the script
-```   ./scriptname.sh```
+```./scriptname.sh```
