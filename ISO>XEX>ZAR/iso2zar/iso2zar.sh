@@ -1,3 +1,6 @@
+# This script uses extract-xiso under the license provided in extract-xiso-license.txt
+
+
 # This script requires wget unzip cmake zarchive-tools build-essential
 
 #!/bin/bash
