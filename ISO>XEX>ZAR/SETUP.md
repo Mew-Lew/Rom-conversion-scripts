@@ -50,7 +50,7 @@ This step allows Termux to access your phone's storage, which is necessary for t
    * **iso2zar.sh:** This script performs a two-step conversion: ISO to XEX, then XEX to ZAR also including zipped iso files.
 
    - Type: `nano scriptname.sh` (Replace `scriptname.sh` with the actual name)
-   - Edit the script (instructions are at the top - remember to adjust input and output paths).
+   - Edit the script - Remember to adjust input and output paths).
    - To save and exit: press `CTRL+X`, then `Y`, and finally `Enter`.
 
 6. **Make Script Executable:**
@@ -64,9 +64,7 @@ This step allows Termux to access your phone's storage, which is necessary for t
 * Replace `scriptname.sh` with the actual script name you want to run.
 * Adjust the input and output paths within the script itself.
 
-* The README file attached includes steps for easier copy and pasting. Please read the advice at the top of each script.
-
 * When you want to run the script again in future
-```proot-distro login ubuntu```
+`proot-distro login ubuntu`
 * Then run the script
-```./scriptname.sh```
+`./scriptname.sh`
