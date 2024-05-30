@@ -40,7 +40,7 @@ termux-setup-storage
    * **chdcreatedvd.sh:** Converts rom files directly to chd in dvd format including zipped rom files.
 
    - Type: `nano scriptname.sh` (Replace `scriptname.sh` with the actual name)
-   - Edit the script (instructions are at the top - remember to adjust input and output paths).
+   - Edit the script - Remember to adjust input and output paths.
    - To save and exit: press `CTRL+X`, then `Y`, and finally `Enter`.
 
 6. **Make Script Executable:**
