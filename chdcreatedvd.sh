@@ -20,7 +20,7 @@ process_cue_files() {
       base_name=$(basename "$cue_file" .cue)
       chd_file="$OUTPUT_DIR/$base_name.chd"
       echo "Processing CUE file: $cue_file"
-      chdman createdvd -hs 2048 -i "$iso_file" -o "$chd_file"
+      chdman createdvd -i "$iso_file" -o "$chd_file"
     fi
   done
 }
@@ -32,7 +32,7 @@ process_iso_files() {
       base_name=$(basename "$iso_file" .iso)
       chd_file="$OUTPUT_DIR/$base_name.chd"
       echo "Processing ISO file: $iso_file"
-      chdman createdvd -i "$iso_file" -o "$chd_file"
+      chdman createdvd -hs 2048 -i "$iso_file" -o "$chd_file"
     fi
   done
 }
