@@ -25,7 +25,7 @@ This step allows Termux to access your phone's storage, which is necessary for t
      pkg install proot-distro
      proot-distro install ubuntu
      proot-distro login ubuntu
-     apt update && apt upgrade (Press Y at prompts)
+     apt update && apt upgrade
      apt install wget unzip cmake zarchive-tools build-essential
      ```
 
