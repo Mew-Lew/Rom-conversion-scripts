@@ -11,7 +11,7 @@ This script converts Xbox 360 ISO files to XEX format while preserving the origi
 
 - Supports files in both .iso and .zip formats.
 - If a zip file is provided, the script will automatically extract the ISO file to a temporary folder within the output path, convert it to XEX format, and then delete the extracted ISO file.
-- The original zip file will remain intact.
+- The original iso or zip file will remain intact.
 
 ### Notes
 - The script has been tested with zip files containing a single .iso file.
