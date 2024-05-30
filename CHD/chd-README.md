@@ -2,10 +2,11 @@ There are two bash scripts: one for CDs (`chdcreatecd.sh`) and one for DVDs (`ch
 
 Use the scripts as follows:
 
+Refer to the Redump database (http://redump.org/) to determine the original media type
+
 -**For PS2**:
-(Refer to the Redump database (http://redump.org/) to determine the original media type)
-- CD: use `createcd`
-- DVD: use `createdvd`
+ - CD: use `createcd`
+ - DVD: use `createdvd`
 
 - **PSP**: `createdvd`
 - **Dreamcast (GDI or BIN/CUE)**: `createcd`
