@@ -1,9 +1,7 @@
-# This script uses extract-xiso under the license provided in extract-xiso-license.txt
-
-
-# This script requires wget unzip cmake zarchive-tools build-essential
-
 #!/bin/bash
+
+# This script utilizes extract-xiso downloaded from [https://github.com/XboxDev/extract-xiso/tree/master].
+# The license terms are detailed in the extract-xiso-license.txt file included in this repository.
 
 # Input and output paths
 input_path="CHANGE/ME/INPUT/PATH"
