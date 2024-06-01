@@ -1,0 +1,56 @@
+#1 Update package lists
+pkg update && pkg upgrade
+# Input Y at every prompt
+
+#2 Allow Termux access to your storage. Press allow when prompted.
+termux-setup-storage
+
+#3 Install proot-distro package manager
+pkg install proot-distro
+
+#4 Install the Ubuntu distribution
+proot-distro install ubuntu
+
+#5 Log into the Ubuntu distribution
+proot-distro login ubuntu
+
+#6 Update package lists within Ubuntu
+apt update && apt upgrade
+
+#7 Install necessary packages: wget, unzip, cmake, ls, zarchive-tools and build-essential
+apt install wget unzip cmake zarchive-tools build-essential
+
+#8 Download the extract-xiso source code from GitHub
+wget https://github.com/XboxDev/extract-xiso/archive/refs/heads/master.zip
+
+#9 Unzip the downloaded file
+unzip master.zip
+
+#10 Navigate to the source directory
+cd extract-xiso-master
+
+#11 Create a build directory and navigate to the build directory
+mkdir build
+cd build
+
+#12 Configure the project
+cmake ..
+
+#13 Compile the project
+make
+
+#14 Install the compiled project
+make install
+
+#15 Return to the home directory
+cd
+
+#16 Open a new script file for editing
+nano scriptname.sh
+# To save and exit, press CTRL, type X and then Y finally press enter.
+
+#17 Make the script executable
+chmod +x scriptname.sh
+
+#18 Run the script
+./scriptname.sh
