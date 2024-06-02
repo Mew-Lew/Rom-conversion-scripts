@@ -20,6 +20,8 @@ apt update && apt upgrade
 #7 Install necessary packages: wget, unzip, cmake, ls, zarchive-tools and build-essential
 apt install wget unzip cmake zarchive-tools build-essential
 
+If only using xex2zar.sh you can skip to step #16
+
 #8 Download the extract-xiso source code from GitHub
 wget https://github.com/XboxDev/extract-xiso/archive/refs/heads/master.zip
 
