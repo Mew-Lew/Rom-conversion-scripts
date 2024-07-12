@@ -59,7 +59,7 @@ This step allows Termux to access your phone's storage, which is necessary for t
 6. **Create and Edit Script:** (Choose the script you need)
 
    * **iso2god.sh:** This script performs a two-step conversion: Rewrites ISO file to compress then converts the rewritten ISO to GOD.
-   You are promoted to decide if to keep the rewritten ISO file/s.
+   You are prompted to decide if you want to keep the rebuilt ISO file/s.
 
    - Type: `nano iso2god.sh`
    - Edit the script - Remember to adjust input and output paths.
