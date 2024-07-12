@@ -19,6 +19,9 @@ This repository contains a collection of bash scripts designed for converting va
 5. **Convert Xbox 360 ISO to XEX to ZAR**
    - Converts Xbox 360 ISO files to XEX format, and then converts XEX files to ZAR format in a single process.
 
+6. **Convert Xbox 360 ISO to GOD**
+   - Rewrites Xbox 360 ISO files using xiso, and then converts the rebuilt ISO files to GOD format in a single process.
+
 ## Getting Started
 
 For detailed setup instructions and usage examples, please refer to the markdown files located in each script's folder. These markdown files provide all the necessary information to get the scripts up and running on your Termux environment.
