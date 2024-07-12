@@ -1,0 +1,91 @@
+# 1. Update Termux package lists
+pkg update
+
+# 2. Upgrade Termux packages
+pkg upgrade
+
+# 3. Grant Termux Storage Access
+termux-setup-storage
+# Follow prompts and tap "Allow" to grant storage access.
+
+# 4. Install proot-distro
+pkg install proot-distro
+
+# 5. Install Ubuntu inside proot-distro
+proot-distro install ubuntu
+
+# 6. Login to the installed Ubuntu environment
+proot-distro login ubuntu
+
+# 7. Update Ubuntu package lists
+apt update
+
+# 8. Upgrade Ubuntu packages
+apt upgrade
+
+# 9. Install necessary tools in Ubuntu (wget, unzip, cmake, build-essential)
+apt install wget unzip cmake build-essential
+
+# 10. Download extract-xiso repository
+wget https://github.com/XboxDev/extract-xiso/archive/refs/heads/master.zip
+
+# 11. Unzip the downloaded extract-xiso repository
+unzip master.zip
+
+# 12. Navigate into the extracted directory
+cd extract-xiso-master
+
+# 13. Create a build directory
+mkdir build
+
+# 14. Navigate into the build directory
+cd build
+
+# 15. Configure cmake for extract-xiso
+cmake ..
+
+# 16. Build extract-xiso
+make
+
+# 17. Install extract-xiso
+make install
+
+# 18. Return to the home directory
+cd
+
+# 19. Install pkg-config in Ubuntu
+apt install pkg-config
+
+# 20. Install libssl-dev in Ubuntu
+apt install libssl-dev
+
+# 21. Download and install rustup toolchain
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# 22. Install nightly Rust toolchain
+rustup install nightly
+
+# 23. Set nightly Rust toolchain as default
+rustup override set nightly
+
+# 24. Clone iso2god-rs repository from GitHub
+git clone https://github.com/Mew-Lew/iso2god-rs.git
+
+# 25. Navigate into iso2god-rs directory
+cd iso2god-rs
+
+# 26. Build ISO2GOD using cargo (Rust package manager)
+cargo build --release
+
+# 27. Return to the home directory
+cd
+
+# 28. Create and edit iso2god.sh script using nano text editor
+nano iso2god.sh
+# Edit the script as needed (adjust input and output paths). Save and exit Nano by pressing CTRL+X, then Y, and finally Enter.
+
+# 29. Make iso2god.sh script executable
+chmod +x iso2god.sh
+
+# 30. Run the iso2god.sh script
+./iso2god.sh
