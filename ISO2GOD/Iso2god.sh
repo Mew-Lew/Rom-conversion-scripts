@@ -30,7 +30,7 @@ done
 
 # If chooses to cancel
 if [ "$choice" == "3" ]; then
-    echo -e "\e[31mConversion cancelled by user.\e[0m"
+    echo -e "\e[31mConversion cancelled.\e[0m"
     exit 0
 fi
 
@@ -49,19 +49,19 @@ rewrite_iso() {
     fi
 }
 
-# Function to convert rewritten ISO to GOD
+# Function to convert rebuilt ISO to GOD
 convert_to_god() {
     local rewritten_iso="$1"
     local file_name=$(basename -- "$rewritten_iso")
 
-    echo "Converting rewritten ISO file $file_name to GOD..."
+    echo "Converting rebuilt ISO file $file_name to GOD..."
     (cd && ./iso2god-rs/target/release/iso2god "$rewritten_iso" "$output_path")
     if [ $? -eq 0 ]; then
         echo -e "\e[32mGOD file for $file_name created successfully.\e[0m"
-        # Delete rewritten ISO if the user chose not to keep it
+        # Delete rebuilt ISO if chose not to keep it
         if [ "$choice" == "2" ]; then
             rm -f "$rewritten_iso"
-            echo -e "\e[32mRewritten ISO file $file_name deleted.\e[0m"
+            echo -e "\e[32mRebuilt ISO file $file_name deleted.\e[0m"
         fi
     else
         echo -e "\e[31mFailed to convert $file_name to GOD.\e[0m"
@@ -105,5 +105,5 @@ done
 if [ "$files_processed" = false ]; then
     echo -e "\e[31mNo ISO or ZIP files found to rewrite in the input directory.\e[0m"
 else
-    echo -e "\e[32mAll ISO files have been rewritten and converted to GOD.\e[0m"
+    echo -e "\e[32mAll ISO files have been rebuilt and converted to GOD.\e[0m"
 fi
