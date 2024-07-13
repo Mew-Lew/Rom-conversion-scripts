@@ -21,7 +21,7 @@
      ```
    - Type the following command:
      ```
-     ./Iso2god.sh
+     ./iso2god.sh
      ```
    - You will be prompted to choose whether to keep the rebuilt ISO.
 
