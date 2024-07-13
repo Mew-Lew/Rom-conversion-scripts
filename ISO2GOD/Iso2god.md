@@ -26,7 +26,7 @@ This step allows Termux to access your phone's storage, which is necessary for t
      proot-distro install ubuntu
      proot-distro login ubuntu
      apt update && apt upgrade
-     apt install wget unzip cmake build-essential
+     apt install wget unzip cmake git build-essential
      ```
 
 4. **Download and Compile extract-xiso (See txt file for license):**
