@@ -1,6 +1,6 @@
-### Setting up ISO2GOD on Termux
+## Setting up ISO2GOD on Termux
 
-## This will require 5GB free storage on your device.
+### This will require 5GB free storage on your device.
 
 1. **Create ISO2GOD Input Folder:**
    - In your download folder, create a folder called `ISO2GOD Input`.
