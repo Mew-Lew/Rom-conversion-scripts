@@ -4,7 +4,7 @@ This tool lets you convert ISO files for Xbox 360 on your phone.
 
 **Before you start, you'll need:**
 
-* ~1GB of free space on your phone
+* ~5GB of free space on your phone
 
 **Here's what to do:**
 
