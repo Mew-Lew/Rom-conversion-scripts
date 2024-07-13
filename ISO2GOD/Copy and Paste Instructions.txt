@@ -24,7 +24,7 @@ apt update
 apt upgrade
 
 # 9. Install necessary tools in Ubuntu (wget, unzip, cmake, build-essential)
-apt install wget unzip cmake build-essential
+apt install wget unzip cmake git build-essential
 
 # 10. Download extract-xiso repository
 wget https://github.com/XboxDev/extract-xiso/archive/refs/heads/master.zip
