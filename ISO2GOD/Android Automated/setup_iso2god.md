@@ -31,4 +31,4 @@
    - Allow the conversion to complete.
    - Your GOD roms will be in a new folder named `ISO2GOD Output` in your download path.
 
-### To convert roms in future just follow step 6 again.
+#### To convert roms in future just follow step 5 again.
