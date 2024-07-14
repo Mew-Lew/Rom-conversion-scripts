@@ -26,4 +26,7 @@ This repository contains a collection of bash scripts designed for converting va
 
 For detailed setup instructions and usage examples, please refer to the markdown files located in each script's folder. These markdown files provide all the necessary information to get the scripts up and running on your Termux environment.
 
+Check **Android Automated** folders for scripts to automate the setup and script creation on android. Please read the accompanying markdown notes in the folders for further information.
+
+
 Happy converting!
