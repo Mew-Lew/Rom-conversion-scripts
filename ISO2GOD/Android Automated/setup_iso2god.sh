@@ -1,94 +1,94 @@
 #!/bin/bash
 
-echo "Updating Termux package lists..."
+echo -e "\e[32mUpdating Termux package lists...\e[0m"
 pkg update -y
 
-echo "Upgrading Termux packages..."
+echo -e "\e[32mUpgrading Termux packages...\e[0m"
 yes | pkg upgrade
 
-echo "Granting Termux Storage Access..."
+echo -e "\e[32mGranting Termux Storage Access...\e[0m"
 termux-setup-storage
 
 # Allow some time for the user to grant storage access
-echo "Please allow storage access..."
+echo -e "\e[32mPlease allow storage access...\e[0m"
 sleep 5
 # Simulate pressing Enter to continue the script
 printf '\n' | read
 
-echo "Installing proot-distro..."
+echo -e "\e[32mInstalling proot-distro...\e[0m"
 pkg install proot-distro -y
 
-echo "Setting up Ubuntu environment inside proot-distro..."
+echo -e "\e[32mSetting up Ubuntu environment inside proot-distro...\e[0m"
 proot-distro install ubuntu
 
-echo "Logging into the installed Ubuntu environment and running the rest of the setup script..."
+echo -e "\e[32mLogging into the installed Ubuntu environment and running the rest of the setup script...\e[0m"
 proot-distro login ubuntu << 'EOF'
 
-echo "Updating Ubuntu package lists..."
+echo -e "\e[32mUpdating Ubuntu package lists...\e[0m"
 apt update -y
 
-echo "Upgrading Ubuntu packages..."
+echo -e "\e[32mUpgrading Ubuntu packages...\e[0m"
 apt upgrade -y
 
-echo "Installing necessary tools in Ubuntu (wget, unzip, cmake, build-essential)..."
+echo -e "\e[32mInstalling necessary tools in Ubuntu (wget, unzip, cmake, git, build-essential)...\e[0m"
 apt install wget unzip cmake git build-essential -y
 
-echo "Downloading extract-xiso repository..."
+echo -e "\e[32mDownloading extract-xiso repository...\e[0m"
 wget https://github.com/XboxDev/extract-xiso/archive/refs/heads/master.zip
 
-echo "Unzipping the downloaded extract-xiso repository..."
+echo -e "\e[32mUnzipping the downloaded extract-xiso repository...\e[0m"
 unzip master.zip
 
-echo "Navigating into the extracted directory..."
+echo -e "\e[32mNavigating into the extracted directory...\e[0m"
 cd extract-xiso-master
 
-echo "Creating a build directory..."
+echo -e "\e[32mCreating a build directory...\e[0m"
 mkdir build
 
-echo "Navigating into the build directory..."
+echo -e "\e[32mNavigating into the build directory...\e[0m"
 cd build
 
-echo "Configuring cmake for extract-xiso..."
+echo -e "\e[32mConfiguring cmake for extract-xiso...\e[0m"
 cmake ..
 
-echo "Building extract-xiso..."
+echo -e "\e[32mBuilding extract-xiso...\e[0m"
 make
 
-echo "Installing extract-xiso..."
+echo -e "\e[32mInstalling extract-xiso...\e[0m"
 make install
 
-echo "Returning to the home directory..."
+echo -e "\e[32mReturning to the home directory...\e[0m"
 cd ~
 
-echo "Installing pkg-config in Ubuntu..."
+echo -e "\e[32mInstalling pkg-config in Ubuntu...\e[0m"
 apt install pkg-config -y
 
-echo "Installing libssl-dev in Ubuntu..."
+echo -e "\e[32mInstalling libssl-dev in Ubuntu...\e[0m"
 apt install libssl-dev -y
 
-echo "Downloading and installing rustup toolchain..."
+echo -e "\e[32mDownloading and installing rustup toolchain...\e[0m"
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 
-echo "Installing nightly Rust toolchain..."
+echo -e "\e[32mInstalling nightly Rust toolchain...\e[0m"
 source $HOME/.cargo/env
 rustup install nightly
 
-echo "Setting nightly Rust toolchain as default..."
+echo -e "\e[32mSetting nightly Rust toolchain as default...\e[0m"
 rustup override set nightly
 
-echo "Cloning iso2god-rs repository from GitHub..."
+echo -e "\e[32mCloning iso2god-rs repository from GitHub...\e[0m"
 git clone https://github.com/Mew-Lew/iso2god-rs.git
 
-echo "Navigating into iso2god-rs directory..."
+echo -e "\e[32mNavigating into iso2god-rs directory...\e[0m"
 cd iso2god-rs
 
-echo "Building ISO2GOD using cargo (Rust package manager)..."
+echo -e "\e[32mBuilding ISO2GOD using cargo (Rust package manager)...\e[0m"
 cargo build --release
 
-echo "Returning to the home directory..."
+echo -e "\e[32mReturning to the home directory...\e[0m"
 cd ~
 
-echo "Creating iso2god.sh script with the provided content..."
+echo -e "\e[32mCreating iso2god.sh script...\e[0m"
 cat << 'EOL' > iso2god.sh
 #!/bin/bash
 
@@ -201,10 +201,10 @@ else
 fi
 EOL
 
-echo "Making iso2god.sh script executable..."
+echo -e "\e[32mMaking iso2god.sh script executable...\e[0m"
 chmod +x iso2god.sh
 
-echo "Installation and setup complete. You can now run the iso2god.sh script by logging in to the Ubuntu environment with proot-distro login ubuntu and executing ./iso2god.sh."
+echo -e "\e[32mInstallation and setup complete. You can now run the iso2god.sh script by logging in to the Ubuntu environment with proot-distro login ubuntu and executing ./iso2god.sh.\e[0m"
 EOF
 
-echo "All steps completed. Please run the script again if you encounter any issues."
+echo -e "\e[32mAll steps completed. Please run the script again if you encounter any issues.\e[0m"
