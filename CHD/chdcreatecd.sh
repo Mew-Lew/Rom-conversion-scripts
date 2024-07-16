@@ -43,7 +43,7 @@ process_gdi_files() {
       data_files=("$1/${base_name}"*.bin "$1/${base_name}"*.raw)
       chd_file="$OUTPUT_DIR/$base_name.chd"
       echo "Processing GDI file: $gdi_file"
-      chdman createcd -i "$gdi_file" -o "$chd_file" "${data_files[@]}"
+      chdman createcd -i "$gdi_file" -o "$chd_file"
     fi
   done
 }
