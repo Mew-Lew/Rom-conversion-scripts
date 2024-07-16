@@ -28,5 +28,6 @@ For detailed setup instructions and usage examples, please refer to the markdown
 
 Check **Android Automated** folders for scripts to automate the setup and script creation on android. Please read the accompanying markdown notes in the folders for further information.
 
+### To install all the conversion scripts in one easy step, use the `setup_complete.sh` script in "Android Automated Complete".
 
 Happy converting!
