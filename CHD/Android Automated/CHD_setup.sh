@@ -5,6 +5,11 @@ green_text() {
   echo -e "\e[32m$1\e[0m"
 }
 
+# Function to display messages in blue
+blue_text() {
+  echo -e "\e[34m$1\e[0m"
+}
+
 green_text "Updating Termux package lists..."
 pkg update -y
 
@@ -26,19 +31,19 @@ pkg install proot-distro -y
 green_text "Setting up Ubuntu environment inside proot-distro..."
 proot-distro install ubuntu
 
-green_text "Logging into the installed Ubuntu environment and running the rest of the setup script..."
+green_text "Logging into the installed Ubuntu environment..."
 proot-distro login ubuntu << 'EOF'
 
-echo -e "\e[32mUpdating Ubuntu package lists...\e[0m"
+green_text "Updating Ubuntu package lists..."
 apt update -y
 
-echo -e "\e[32mUpgrading Ubuntu packages...\e[0m"
+green_text "Upgrading Ubuntu packages..."
 apt upgrade -y
 
-echo -e "\e[32mInstalling MAME tools and unzip...\e[0m"
+green_text "Installing MAME tools and unzip..."
 DEBIAN_FRONTEND=noninteractive apt install -y mame-tools unzip
 
-echo -e "\e[32mCreating chdcreatecd.sh script...\e[0m"
+green_text "Creating chdcreatecd.sh script..."
 cat << 'EOS' > /root/chdcreatecd.sh
 #!/bin/bash
 
@@ -192,7 +197,7 @@ chmod +x /root/chdcreatedvd.sh
 EOF
 
 green_text "Setup complete!"
-green_text "To use the CHD creation scripts, log in to Ubuntu with:"
-echo -e "\e[34mproot-distro login ubuntu\e[0m"
+green_text "To use the CHD conversion scripts, log in to Ubuntu with:"
+blue_text "proot-distro login ubuntu"
 green_text "Then run the desired script with:"
-echo -e "\e[34m./chdcreatecd.sh or ./chdcreatedvd.sh\e[0m"
+blue_text "./chdcreatecd.sh or ./chdcreatedvd.sh"
