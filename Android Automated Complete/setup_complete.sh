@@ -1,142 +1,456 @@
-#!/bin/bash
+#!/data/data/com.termux/files/usr/bin/bash
+
+set -Eeuo pipefail
+
+GREEN='\e[32m'
+YELLOW='\e[33m'
+BLUE='\e[34m'
+MAGENTA='\e[35m'
+RESET='\e[0m'
+SCRIPT_VERSION='3.2.0'
+
+on_error() {
+    local exit_code=$?
+    local line_number=$1
+    echo -e "\e[31mSetup failed on line ${line_number} with exit code ${exit_code}.${RESET}" >&2
+    exit "$exit_code"
+}
+
+trap 'on_error $LINENO' ERR
+
+case "${1:-}" in
+    --normal|'')
+        SETUP_MODE='normal'
+        ;;
+    --update)
+        SETUP_MODE='update'
+        ;;
+    -h|--help)
+        echo "Usage: $0 [--normal|--update]"
+        echo "  --normal  Install or repair required tools without full system upgrades"
+        echo "  --update  Upgrade Termux and Ubuntu packages before installing or repairing tools"
+        exit 0
+        ;;
+    *)
+        echo -e "\e[31mUnknown option: ${1}\e[0m" >&2
+        exit 2
+        ;;
+esac
+
+if [ "$#" -eq 0 ]; then
+    echo -e "${GREEN}ROM Conversion Scripts setup ${SCRIPT_VERSION}${RESET}"
+    echo -e "${BLUE}1) Normal setup or repair${RESET}"
+    echo -e "${YELLOW}2) Update system packages, then setup or repair${RESET}"
+    echo -e "\e[31m3) Cancel${RESET}"
+    read -r -p "Enter your choice (1-3): " setup_choice
+    case "$setup_choice" in
+        1) SETUP_MODE='normal' ;;
+        2) SETUP_MODE='update' ;;
+        3) exit 0 ;;
+        *)
+            echo -e "\e[31mInvalid setup choice.${RESET}" >&2
+            exit 2
+            ;;
+    esac
+fi
 
 echo -e "\e[32mUpdating Termux package lists...\e[0m"
 pkg update -y
 
-echo -e "\e[32mUpgrading Termux packages...\e[0m"
-yes | pkg upgrade
+if [ "$SETUP_MODE" = 'update' ]; then
+    echo -e "\e[32mUpgrading Termux packages...\e[0m"
+    pkg upgrade -y
+else
+    echo -e "${YELLOW}Skipping the full Termux upgrade in normal mode.${RESET}"
+fi
 
-echo -e "\e[32mGranting Termux Storage Access...\e[0m"
-termux-setup-storage
-
-# Allow some time for the user to grant storage access
-echo -e "\e[32mPlease allow storage access...\e[0m"
-sleep 5
-# Simulate pressing Enter to continue the script
-printf '\n' | read
+if [ ! -e "$HOME/storage/shared" ]; then
+    echo -e "${GREEN}Requesting Termux storage access...${RESET}"
+    termux-setup-storage
+    read -r -p "Grant storage permission, then press Enter to continue... "
+fi
 
 echo -e "\e[32mInstalling proot-distro...\e[0m"
 pkg install proot-distro -y
 
-echo -e "\e[32mSetting up Ubuntu environment inside proot-distro...\e[0m"
-proot-distro install ubuntu
+if ! proot-distro login ubuntu -- true >/dev/null 2>&1; then
+    echo -e "${GREEN}Installing the Ubuntu environment...${RESET}"
+    proot-distro install ubuntu
+else
+    echo -e "${YELLOW}Ubuntu is already installed; reusing it.${RESET}"
+fi
 
 echo -e "\e[32mLogging into the installed Ubuntu environment and running the rest of the setup script...\e[0m"
-proot-distro login ubuntu << 'EOF'
+if ! proot-distro login ubuntu -- env SETUP_MODE="$SETUP_MODE" bash -s << 'EOF'
+
+set -Eeuo pipefail
+
+trap 'exit_code=$?; echo -e "\e[31mUbuntu setup failed on line ${LINENO} with exit code ${exit_code}.\e[0m" >&2; exit "$exit_code"' ERR
+
+export DEBIAN_FRONTEND=noninteractive
+
+INSTALL_TEMP_PATHS=()
+
+cleanup_install_temp() {
+    local temp_path
+    for temp_path in "${INSTALL_TEMP_PATHS[@]}"; do
+        if [ -n "$temp_path" ] && [ -e "$temp_path" ]; then
+            rm -rf -- "$temp_path"
+        fi
+    done
+}
+
+trap cleanup_install_temp EXIT
 
 echo -e "\e[32mUpdating Ubuntu package lists...\e[0m"
-apt update -y
+apt update
 
-echo -e "\e[32mUpgrading Ubuntu packages...\e[0m"
-apt upgrade -y
+if [ "$SETUP_MODE" = 'update' ]; then
+    echo -e "\e[32mUpgrading Ubuntu packages...\e[0m"
+    apt upgrade -y
+else
+    echo -e "\e[33mSkipping the full Ubuntu upgrade in normal mode.\e[0m"
+fi
 
-echo -e "\e[32mInstalling necessary tools in Ubuntu...\e[0m"
-apt install wget unzip cmake git build-essential zarchive-tools -y
+echo -e "\e[32mInstalling the required Ubuntu packages...\e[0m"
+apt install -y \
+    build-essential \
+    ca-certificates \
+    cmake \
+    curl \
+    mame-tools \
+    tar \
+    unzip \
+    zarchive-tools
 
-DEBIAN_FRONTEND=noninteractive apt install mame-tools -y
+EXTRACT_XISO_COMMIT="b72e5b60d598ec6df80534cda19cdcd4361aa18c"
+EXTRACT_XISO_ARCHIVE_SHA256="68789095f8a6011f0cd07ab5794909be867dc5f8448f062c503316e262f046a0"
+EXTRACT_XISO_ARCHIVE_URL="https://github.com/XboxDev/extract-xiso/archive/${EXTRACT_XISO_COMMIT}.tar.gz"
+EXTRACT_XISO_STAMP="/usr/local/share/rom-conversion-scripts/extract-xiso.commit"
 
-apt install pkg-config -y
+ISO2GOD_VERSION="v1.8.1"
+ISO2GOD_SHA256="e32c812a803da0a3ff65cd405a42a463b05e09a8589e06a956db57d99eba852b"
+ISO2GOD_URL="https://github.com/iliazeus/iso2god-rs/releases/download/${ISO2GOD_VERSION}/iso2god-aarch64-linux"
+ISO2GOD_BIN="/usr/local/bin/iso2god"
 
-apt install libssl-dev -y
+if [ "$(uname -m)" != 'aarch64' ]; then
+    echo -e "\e[31mUnsupported Ubuntu architecture: $(uname -m). This installer requires AArch64.\e[0m" >&2
+    exit 1
+fi
 
-echo -e "\e[32mDownloading extract-xiso source code from GitHub...\e[0m"
-wget https://github.com/XboxDev/extract-xiso/archive/refs/heads/master.zip
+file_sha256_matches() {
+    local file_path="$1"
+    local expected_hash="$2"
+    [ -f "$file_path" ] && [ "$(sha256sum "$file_path" | awk '{print $1}')" = "$expected_hash" ]
+}
 
-echo -e "\e[32mUnzipping the downloaded file...\e[0m"
-unzip master.zip
+if command -v extract-xiso >/dev/null 2>&1 &&
+   [ -f "$EXTRACT_XISO_STAMP" ] &&
+   [ "$(tr -d '\r\n' < "$EXTRACT_XISO_STAMP")" = "$EXTRACT_XISO_COMMIT" ]; then
+    echo -e "\e[33mextract-xiso is already current; skipping its build.\e[0m"
+else
+    echo -e "\e[32mBuilding the pinned extract-xiso release...\e[0m"
+    extract_archive=$(mktemp --suffix=.tar.gz)
+    extract_workspace=$(mktemp -d)
+    INSTALL_TEMP_PATHS+=("$extract_archive" "$extract_workspace")
 
-echo -e "\e[32mNavigating to the source directory...\e[0m"
-cd extract-xiso-master
+    curl -fL --retry 3 --retry-delay 2 "$EXTRACT_XISO_ARCHIVE_URL" -o "$extract_archive"
+    if ! file_sha256_matches "$extract_archive" "$EXTRACT_XISO_ARCHIVE_SHA256"; then
+        echo -e "\e[31mextract-xiso archive checksum verification failed.\e[0m" >&2
+        exit 1
+    fi
 
-echo -e "\e[32mCreating a build directory and navigating to it...\e[0m"
-mkdir build
-cd build
+    tar -xzf "$extract_archive" -C "$extract_workspace"
+    extract_source="$extract_workspace/extract-xiso-${EXTRACT_XISO_COMMIT}"
+    cmake -S "$extract_source" -B "$extract_source/build" -DCMAKE_BUILD_TYPE=Release
+    cmake --build "$extract_source/build" --parallel "$(nproc)"
+    cmake --install "$extract_source/build"
+    install -d "$(dirname "$EXTRACT_XISO_STAMP")"
+    printf '%s\n' "$EXTRACT_XISO_COMMIT" > "$EXTRACT_XISO_STAMP"
+fi
 
-echo -e "\e[32mConfiguring the project...\e[0m"
-cmake ..
+if file_sha256_matches "$ISO2GOD_BIN" "$ISO2GOD_SHA256"; then
+    echo -e "\e[33mISO2GOD ${ISO2GOD_VERSION} is already installed; skipping its download.\e[0m"
+else
+    echo -e "\e[32mDownloading the verified ISO2GOD ${ISO2GOD_VERSION} AArch64 binary...\e[0m"
+    iso2god_download=$(mktemp)
+    INSTALL_TEMP_PATHS+=("$iso2god_download")
+    curl -fL --retry 3 --retry-delay 2 "$ISO2GOD_URL" -o "$iso2god_download"
+    if ! file_sha256_matches "$iso2god_download" "$ISO2GOD_SHA256"; then
+        echo -e "\e[31mISO2GOD checksum verification failed.\e[0m" >&2
+        exit 1
+    fi
+    install -m 0755 "$iso2god_download" "$ISO2GOD_BIN"
+fi
 
-echo -e "\e[32mCompiling the project...\e[0m"
-make
+cd "$HOME"
 
-echo -e "\e[32mInstalling the compiled project...\e[0m"
-make install
-
-echo -e "\e[32mReturning to the home directory...\e[0m"
-cd
-
-echo -e "\e[32mDownloading and installing rustup toolchain...\e[0m"
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-
-echo -e "\e[32mInstalling nightly Rust toolchain...\e[0m"
-source $HOME/.cargo/env
-rustup install nightly
-
-echo -e "\e[32mSetting nightly Rust toolchain as default...\e[0m"
-rustup override set nightly
-
-echo -e "\e[32mCloning iso2god-rs repository from GitHub...\e[0m"
-git clone https://github.com/Mew-Lew/iso2god-rs.git
-
-echo -e "\e[32mNavigating into iso2god-rs directory...\e[0m"
-cd iso2god-rs
-
-echo -e "\e[32mBuilding ISO2GOD using cargo (Rust package manager)...\e[0m"
-cargo build --release
-
-echo -e "\e[32mReturning to the home directory...\e[0m"
-cd ~
+mkdir -p \
+    "/storage/emulated/0/Download/Roms/CD Input" \
+    "/storage/emulated/0/Download/Roms/CD Output" \
+    "/storage/emulated/0/Download/Roms/DVD Input" \
+    "/storage/emulated/0/Download/Roms/DVD Output" \
+    "/storage/emulated/0/Download/Roms/ISO Input" \
+    "/storage/emulated/0/Download/Roms/XEX Input" \
+    "/storage/emulated/0/Download/Roms/XEX Output" \
+    "/storage/emulated/0/Download/Roms/ZAR Output" \
+    "/storage/emulated/0/Download/Roms/ISO2GOD Input" \
+    "/storage/emulated/0/Download/Roms/ISO2GOD Output"
 
 echo -e "\e[32mCreating iso2xex.sh script...\e[0m"
 mkdir -p "rom scripts"
+cat << 'EOT' > "rom scripts/common.sh"
+#!/bin/bash
+
+set -uo pipefail
+
+GREEN='\e[32m'
+YELLOW='\e[33m'
+RED='\e[31m'
+RESET='\e[0m'
+SAFE_OUTPUT_ROOT="${SAFE_OUTPUT_ROOT:-/storage/emulated/0/Download/Roms}"
+
+TEMP_DIRS=()
+TEMP_DIR=''
+OUTPUT_ACTION='new'
+BACKUP_PATH=''
+
+ATTEMPTED=0
+SUCCEEDED=0
+SKIPPED=0
+FAILED=0
+
+cleanup_temp_dirs() {
+    local temp_dir
+    for temp_dir in "${TEMP_DIRS[@]}"; do
+        if [ -n "$temp_dir" ] && [ -d "$temp_dir" ]; then
+            rm -rf -- "$temp_dir"
+        fi
+    done
+}
+
+trap cleanup_temp_dirs EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+make_temp_dir() {
+    local template="$1"
+    TEMP_DIR=$(mktemp -d -- "$template") || return 1
+    TEMP_DIRS+=("$TEMP_DIR")
+}
+
+remove_temp_dir() {
+    local temp_dir="$1"
+    if [ -n "$temp_dir" ] && [ -d "$temp_dir" ]; then
+        rm -rf -- "$temp_dir"
+    fi
+}
+
+is_safe_output_target() {
+    case "$1" in
+        "$SAFE_OUTPUT_ROOT"/*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+next_backup_path() {
+    local target="$1"
+    local timestamp
+    local candidate
+    local suffix=0
+
+    timestamp=$(date +%Y%m%d-%H%M%S)
+    candidate="${target}.backup-${timestamp}"
+    while [ -e "$candidate" ]; do
+        ((suffix++))
+        candidate="${target}.backup-${timestamp}-${suffix}"
+    done
+    BACKUP_PATH="$candidate"
+}
+
+select_output_action() {
+    local target="$1"
+    local choice
+
+    OUTPUT_ACTION='new'
+    if [ ! -e "$target" ]; then
+        return 0
+    fi
+
+    while true; do
+        echo -e "${YELLOW}Output already exists:${RESET} $target"
+        echo '1) Skip this item'
+        echo '2) Overwrite it after the new conversion succeeds'
+        echo '3) Rename the existing output as a timestamped backup'
+        echo '4) Cancel'
+        read -r -p 'Enter your choice (1-4): ' choice
+        case "$choice" in
+            1) OUTPUT_ACTION='skip'; return 0 ;;
+            2) OUTPUT_ACTION='overwrite'; return 0 ;;
+            3) OUTPUT_ACTION='backup'; return 0 ;;
+            4) OUTPUT_ACTION='cancel'; return 0 ;;
+            *) echo -e "${RED}Invalid choice.${RESET}" ;;
+        esac
+    done
+}
+
+commit_staged_output() {
+    local staged="$1"
+    local target="$2"
+
+    if ! is_safe_output_target "$target"; then
+        echo -e "${RED}Refusing unsafe output target: $target${RESET}" >&2
+        return 1
+    fi
+
+    mkdir -p -- "$(dirname -- "$target")"
+    case "$OUTPUT_ACTION" in
+        new)
+            if [ -e "$target" ]; then
+                echo -e "${RED}Output appeared during conversion; refusing to overwrite it: $target${RESET}" >&2
+                return 1
+            fi
+            ;;
+        overwrite)
+            rm -rf -- "$target"
+            ;;
+        backup)
+            next_backup_path "$target"
+            mv -- "$target" "$BACKUP_PATH" || return 1
+            echo -e "${YELLOW}Existing output moved to:${RESET} $BACKUP_PATH"
+            ;;
+        *)
+            echo -e "${RED}Invalid commit action: $OUTPUT_ACTION${RESET}" >&2
+            return 1
+            ;;
+    esac
+
+    if mv -- "$staged" "$target"; then
+        return 0
+    fi
+
+    if [ "$OUTPUT_ACTION" = 'backup' ] && [ -e "$BACKUP_PATH" ] && [ ! -e "$target" ]; then
+        mv -- "$BACKUP_PATH" "$target" || true
+    fi
+    return 1
+}
+
+handle_selected_action() {
+    case "$OUTPUT_ACTION" in
+        skip)
+            ((SKIPPED++))
+            return 10
+            ;;
+        cancel)
+            print_summary
+            exit 130
+            ;;
+        *) return 0 ;;
+    esac
+}
+
+print_summary() {
+    echo
+    echo -e "${GREEN}Conversion summary${RESET}"
+    echo "Attempted: $ATTEMPTED"
+    echo "Succeeded: $SUCCEEDED"
+    echo "Skipped:   $SKIPPED"
+    echo "Failed:    $FAILED"
+}
+
+finish_with_summary() {
+    print_summary
+    if [ "$FAILED" -gt 0 ]; then
+        exit 1
+    fi
+}
+EOT
+
+chmod +x "rom scripts/common.sh"
+
+echo -e "\e[32mCreating iso2xex.sh script...\e[0m"
 cat << 'EOT' > "rom scripts/iso2xex.sh"
 #!/bin/bash
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
 
 input_path="/storage/emulated/0/Download/Roms/ISO Input"
 output_path="/storage/emulated/0/Download/Roms/XEX Output"
 
 mkdir -p "$output_path"
 
-files_processed=false
-
 convert_iso_to_xex() {
     local iso_file="$1"
-    local file_name=$(basename -- "$iso_file")
-    local file_name_without_extension="${file_name%.*}"
-    local iso_output_dir="$output_path/$file_name_without_extension"
-    mkdir -p "$iso_output_dir"
-    echo -e "\e[32mCreating XEX file for $file_name...\e[0m"
-    extract-xiso -x "$iso_file" -d "$iso_output_dir"
+    local file_name
+    local base_name
+    local target
+    local staging_root
+    local staged_output
+
+    file_name=$(basename -- "$iso_file")
+    base_name="${file_name%.*}"
+    target="$output_path/$base_name"
+    ((ATTEMPTED++))
+
+    select_output_action "$target"
+    handle_selected_action
+    if [ "$?" -eq 10 ]; then
+        echo -e "${YELLOW}Skipped:${RESET} $file_name"
+        return 0
+    fi
+
+    make_temp_dir "$output_path/.iso2xex.XXXXXX" || {
+        ((FAILED++))
+        return 1
+    }
+    staging_root="$TEMP_DIR"
+    staged_output="$staging_root/$base_name"
+    mkdir -p -- "$staged_output"
+
+    echo -e "${GREEN}Creating XEX files for $file_name...${RESET}"
+    if extract-xiso -x "$iso_file" -d "$staged_output" &&
+       commit_staged_output "$staged_output" "$target"; then
+        ((SUCCEEDED++))
+        echo -e "${GREEN}Created:${RESET} $target"
+    else
+        ((FAILED++))
+        echo -e "${RED}Failed:${RESET} $file_name" >&2
+    fi
+
+    remove_temp_dir "$staging_root"
 }
 
-for iso_file in "$input_path"/*.iso; do
-    if [ -f "$iso_file" ]; then
-        convert_iso_to_xex "$iso_file"
-        files_processed=true
-    fi
-done
+while IFS= read -r -d '' iso_file; do
+    convert_iso_to_xex "$iso_file"
+done < <(find "$input_path" -type f -iname '*.iso' -print0)
 
-for zip_file in "$input_path"/*.zip; do
-    if [ -f "$zip_file" ]; then
-        temp_dir="$output_path/temporary"
-        mkdir -p "$temp_dir"
-        echo -e "\e[32mExtracting ZIP file $zip_file...\e[0m"
-        unzip -q "$zip_file" -d "$temp_dir"
-        for iso_file in "$temp_dir"/*.iso; do
-            if [ -f "$iso_file" ]; then
-                convert_iso_to_xex "$iso_file"
-                files_processed=true
-            fi
-        done
-        rm -rf "$temp_dir"
-        echo -e "\e[32mTemporary folder for unzipped ISOs was deleted successfully.\e[0m"
+while IFS= read -r -d '' zip_file; do
+    make_temp_dir "$output_path/.iso2xex-zip.XXXXXX" || {
+        ((ATTEMPTED++))
+        ((FAILED++))
+        continue
+    }
+    zip_temp="$TEMP_DIR"
+    echo -e "${GREEN}Extracting archive:${RESET} $zip_file"
+    if unzip -q "$zip_file" -d "$zip_temp"; then
+        while IFS= read -r -d '' iso_file; do
+            convert_iso_to_xex "$iso_file"
+        done < <(find "$zip_temp" -type f -iname '*.iso' -print0)
+    else
+        ((ATTEMPTED++))
+        ((FAILED++))
+        echo -e "${RED}Failed to extract:${RESET} $zip_file" >&2
     fi
-done
+    remove_temp_dir "$zip_temp"
+done < <(find "$input_path" -type f -iname '*.zip' -print0)
 
-if [ "$files_processed" = false ]; then
-    echo -e "\e[31mNo ISO or ZIP files found to convert in the input directory.\e[0m"
-else
-    echo -e "\e[32mAll ISO files have been processed.\e[0m"
+if [ "$ATTEMPTED" -eq 0 ]; then
+    echo -e "${YELLOW}No ISO or ZIP files were found.${RESET}"
 fi
+
+finish_with_summary
 EOT
 
 chmod +x "rom scripts/iso2xex.sh"
@@ -145,92 +459,94 @@ echo -e "\e[32mCreating iso2zar.sh script...\e[0m"
 cat << 'EOT' > "rom scripts/iso2zar.sh"
 #!/bin/bash
 
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
+
 input_path="/storage/emulated/0/Download/Roms/ISO Input"
 xex_output_path="/storage/emulated/0/Download/Roms/XEX Output"
 zar_output_path="/storage/emulated/0/Download/Roms/ZAR Output"
 
 mkdir -p "$xex_output_path" "$zar_output_path"
 
-convert_iso_to_xex() {
+convert_iso_to_zar() {
     local iso_file="$1"
-    local temp_dir="$2"
-    local file_name=$(basename -- "$iso_file")
-    local file_name_without_extension="${file_name%.*}"
-    local xex_output_dir="$xex_output_path/$file_name_without_extension"
-    mkdir -p "$xex_output_dir"
-    echo -e "\e[32mCreating XEX file for $file_name...\e[0m"
-    if ! extract-xiso -x "$iso_file" -d "$xex_output_dir"; then
-        echo -e "\e[31mFailed to create XEX file for $file_name.\e[0m"
+    local file_name
+    local base_name
+    local target
+    local staging_root
+    local xex_folder
+    local staged_zar
+
+    file_name=$(basename -- "$iso_file")
+    base_name="${file_name%.*}"
+    target="$zar_output_path/$base_name.zar"
+    ((ATTEMPTED++))
+
+    select_output_action "$target"
+    handle_selected_action
+    if [ "$?" -eq 10 ]; then
+        echo -e "${YELLOW}Skipped:${RESET} $file_name"
+        return 0
+    fi
+
+    make_temp_dir "$xex_output_path/.iso2zar.XXXXXX" || {
+        ((FAILED++))
         return 1
-    fi
-    if [ -d "$temp_dir" ]; then
-        rm -rf "$temp_dir"
-        echo -e "\e[32mTemporary ISO directory $temp_dir deleted after extracting XEX.\e[0m"
-    fi
-    convert_xex_to_zar "$xex_output_dir"
-}
+    }
+    staging_root="$TEMP_DIR"
+    xex_folder="$staging_root/$base_name"
+    staged_zar="$staging_root/$base_name.zar"
+    mkdir -p -- "$xex_folder"
 
-convert_xex_to_zar() {
-    local xex_folder="$1"
-    local folder_name=$(basename -- "$xex_folder")
-    local zar_file="$zar_output_path/$folder_name.zar"
-    if [ -f "$zar_file" ]; then
-        echo -e "\e[33mThe output file $zar_file already exists. Removing it.\e[0m"
-        rm -f "$zar_file"
-    fi
-    echo -e "\e[32mCreating ZAR file for $folder_name...\e[0m"
-    if ! zarchive "$xex_folder" "$zar_file"; then
-        echo -e "\e[31mFailed to create ZAR file for $folder_name.\e[0m"
-        return 1
-    fi
-    echo -e "\e[32mZAR file $zar_file created successfully.\e[0m"
-    rm -rf "$xex_folder"
-    echo -e "\e[32mXEX folder $folder_name deleted after conversion to ZAR.\e[0m"
-}
-
-if [ ! -d "$input_path" ]; then
-    echo -e "\e[31mInput path $input_path does not exist.\e[0m"
-    exit 1
-elif [ -z "$(ls -A "$input_path")" ]; then
-    echo -e "\e[31mInput path $input_path is empty.\e[0m"
-    exit 1
-fi
-
-iso_files_found=false
-for iso_file in "$input_path"/*.iso; do
-    if [ -f "$iso_file" ]; then
-        iso_files_found=true
-        echo -e "\e[32mProcessing ISO file: $iso_file\e[0m"
-        convert_iso_to_xex "$iso_file" ""
-    fi
-done
-
-zip_files_found=false
-for zip_file in "$input_path"/*.zip; do
-    if [ -f "$zip_file" ]; then
-        zip_files_found=true
-        temp_dir="$xex_output_path/temporary_$(basename -- "$zip_file" .zip)"
-        mkdir -p "$temp_dir"
-        echo -e "\e[32mExtracting ZIP file $zip_file...\e[0m"
-        if unzip -q "$zip_file" -d "$temp_dir"; then
-            for iso_file in "$temp_dir"/*.iso; do
-                if [ -f "$iso_file" ]; then
-                    convert_iso_to_xex "$iso_file" "$temp_dir"
-                fi
-            done
+    echo -e "${GREEN}Extracting XEX files for $file_name...${RESET}"
+    if extract-xiso -x "$iso_file" -d "$xex_folder"; then
+        echo -e "${GREEN}Creating ZAR for $file_name...${RESET}"
+        if zarchive "$xex_folder" "$staged_zar" &&
+           commit_staged_output "$staged_zar" "$target"; then
+            ((SUCCEEDED++))
+            echo -e "${GREEN}Created:${RESET} $target"
         else
-            echo -e "\e[31mFailed to extract ZIP file $zip_file.\e[0m"
-            rm -rf "$temp_dir"
-            echo -e "\e[33mTemporary directory $temp_dir deleted due to extraction failure.\e[0m"
+            ((FAILED++))
+            echo -e "${RED}Failed to create ZAR:${RESET} $file_name" >&2
         fi
+    else
+        ((FAILED++))
+        echo -e "${RED}Failed to extract XEX files:${RESET} $file_name" >&2
     fi
-done
 
-if [ "$iso_files_found" = false ] && [ "$zip_files_found" = false ]; then
-    echo -e "\e[33mNo ISO or ZIP files found in $input_path.\e[0m"
+    remove_temp_dir "$staging_root"
+}
+
+while IFS= read -r -d '' iso_file; do
+    convert_iso_to_zar "$iso_file"
+done < <(find "$input_path" -type f -iname '*.iso' -print0)
+
+while IFS= read -r -d '' zip_file; do
+    make_temp_dir "$xex_output_path/.iso2zar-zip.XXXXXX" || {
+        ((ATTEMPTED++))
+        ((FAILED++))
+        continue
+    }
+    zip_temp="$TEMP_DIR"
+    echo -e "${GREEN}Extracting archive:${RESET} $zip_file"
+    if unzip -q "$zip_file" -d "$zip_temp"; then
+        while IFS= read -r -d '' iso_file; do
+            convert_iso_to_zar "$iso_file"
+        done < <(find "$zip_temp" -type f -iname '*.iso' -print0)
+    else
+        ((ATTEMPTED++))
+        ((FAILED++))
+        echo -e "${RED}Failed to extract:${RESET} $zip_file" >&2
+    fi
+    remove_temp_dir "$zip_temp"
+done < <(find "$input_path" -type f -iname '*.zip' -print0)
+
+if [ "$ATTEMPTED" -eq 0 ]; then
+    echo -e "${YELLOW}No ISO or ZIP files were found.${RESET}"
 fi
 
-echo -e "\e[32mProcessing completed.\e[0m"
+finish_with_summary
 EOT
 
 chmod +x "rom scripts/iso2zar.sh"
@@ -239,33 +555,64 @@ echo -e "\e[32mCreating xex2zar.sh script...\e[0m"
 cat << 'EOT' > "rom scripts/xex2zar.sh"
 #!/bin/bash
 
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
+
 input_path="/storage/emulated/0/Download/Roms/XEX Input"
 output_path="/storage/emulated/0/Download/Roms/ZAR Output"
 
-if [ ! -d "$input_path" ]; then
-    echo -e "\e[31mError: Input path does not exist\e[0m"
-    exit 1
-fi
+mkdir -p "$input_path" "$output_path"
 
-if [ ! -d "$output_path" ]; then
-    mkdir -p "$output_path"
-fi
+convert_xex_folder() {
+    local folder="$1"
+    local folder_name
+    local target
+    local staging_root
+    local staged_zar
+
+    folder_name=$(basename -- "$folder")
+    target="$output_path/$folder_name.zar"
+    ((ATTEMPTED++))
+
+    select_output_action "$target"
+    handle_selected_action
+    if [ "$?" -eq 10 ]; then
+        echo -e "${YELLOW}Skipped:${RESET} $folder_name"
+        return 0
+    fi
+
+    make_temp_dir "$output_path/.xex2zar.XXXXXX" || {
+        ((FAILED++))
+        return 1
+    }
+    staging_root="$TEMP_DIR"
+    staged_zar="$staging_root/$folder_name.zar"
+
+    echo -e "${GREEN}Creating ZAR for $folder_name...${RESET}"
+    if zarchive "$folder" "$staged_zar" &&
+       commit_staged_output "$staged_zar" "$target"; then
+        ((SUCCEEDED++))
+        echo -e "${GREEN}Created:${RESET} $target"
+    else
+        ((FAILED++))
+        echo -e "${RED}Failed:${RESET} $folder_name" >&2
+    fi
+
+    remove_temp_dir "$staging_root"
+}
 
 for folder in "$input_path"/*; do
     if [ -d "$folder" ]; then
-        echo -e "\e[32mConverting folder: $(basename "$folder")\e[0m"
-        zarchive "$folder" "$output_path/$(basename "$folder").zar"
-        if [ $? -eq 0 ]; then
-            echo -e "\e[32mSuccessfully converted $(basename "$folder") to zar file\e[0m"
-        else
-            echo -e "\e[31mError: Failed to convert $(basename "$folder")\e[0m"
-        fi
+        convert_xex_folder "$folder"
     fi
 done
 
-if [ -z "$(ls -A "$input_path")" ]; then
-    echo -e "\e[33mNothing to convert in the input path\e[0m"
+if [ "$ATTEMPTED" -eq 0 ]; then
+    echo -e "${YELLOW}No XEX folders were found.${RESET}"
 fi
+
+finish_with_summary
 EOT
 
 chmod +x "rom scripts/xex2zar.sh"
@@ -274,113 +621,300 @@ echo -e "\e[32mCreating iso2god.sh script...\e[0m"
 cat << 'EOT' > "rom scripts/iso2god.sh"
 #!/bin/bash
 
-# This script utilizes extract-xiso downloaded from [https://github.com/XboxDev/extract-xiso/tree/master].
-# The license terms are detailed in the extract-xiso-license.txt file included in this repository.
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
 
-# Input and output paths
 input_path="/storage/emulated/0/Download/Roms/ISO2GOD Input"
 output_path="/storage/emulated/0/Download/Roms/ISO2GOD Output"
+iso2god_bin="/usr/local/bin/iso2god"
+threads="${ISO2GOD_THREADS:-2}"
+conversion_mode="${ISO2GOD_MODE:-}"
 
-# Check if the output directory exists, if not, create it
+ACTIVE_ORIGINAL=''
+ACTIVE_OLD=''
+COMPACT_SOURCE=''
+
 mkdir -p "$output_path"
 
-# Flag to track if any files were processed
-files_processed=false
+case "$threads" in
+    ''|*[!0-9]*|0) threads=2 ;;
+esac
 
-# Prompt to keep or delete rebuilt ISO files
-echo -e "\e[32mWould you like to KEEP the rebuilt ISO files?\e[0m
-\e[33m1) Yes\e[0m
-\e[35m2) No\e[0m
-\e[31m3) Cancel conversion\e[0m"
+restore_active_original() {
+    if [ -z "$ACTIVE_ORIGINAL" ]; then
+        return 0
+    fi
 
-# Prompt for input
-read -p $'Enter your choice (1-3): ' choice
+    if [ ! -e "$ACTIVE_ORIGINAL" ] && [ -e "$ACTIVE_OLD" ]; then
+        if ! mv -- "$ACTIVE_OLD" "$ACTIVE_ORIGINAL"; then
+            echo -e "${RED}Could not restore source ISO:${RESET} $ACTIVE_ORIGINAL" >&2
+            return 1
+        fi
+    elif [ ! -e "$ACTIVE_ORIGINAL" ] && [ ! -e "$ACTIVE_OLD" ]; then
+        echo -e "${RED}Source ISO and recovery file are both missing:${RESET} $ACTIVE_ORIGINAL" >&2
+        return 1
+    elif [ -e "$ACTIVE_ORIGINAL" ] && [ -e "$ACTIVE_OLD" ]; then
+        echo -e "${RED}Both the source ISO and its .old file exist; refusing to overwrite either:${RESET} $ACTIVE_ORIGINAL" >&2
+        return 1
+    fi
 
-# Validate input
-while [[ "$choice" != "1" && "$choice" != "2" && "$choice" != "3" ]]; do
-    echo -e "\e[31mInvalid input. Please enter '1', '2', or '3'.\e[0m"
-    read -p $'Enter your choice (1-3): ' choice
-done
+    ACTIVE_ORIGINAL=''
+    ACTIVE_OLD=''
+}
 
-# If chooses to cancel
-if [ "$choice" == "3" ]; then
-    echo -e "\e[31mConversion cancelled.\e[0m"
-    exit 0
-fi
+cleanup_iso2god() {
+    restore_active_original || true
+    cleanup_temp_dirs
+}
 
-# Function to rewrite ISO using extract-xiso
-rewrite_iso() {
-    local iso_file="$1"
-    local file_name=$(basename -- "$iso_file")
+trap cleanup_iso2god EXIT
+trap 'cleanup_iso2god; exit 130' INT
+trap 'cleanup_iso2god; exit 143' TERM
 
-    # Perform the rewrite
-    extract-xiso -r "$iso_file" -d "$input_path"
-    if [ $? -eq 0 ]; then
-        local rewritten_iso="$input_path/$file_name"
-        convert_to_god "$rewritten_iso"
+recover_interrupted_sources() {
+    local old_file
+    local original_file
+
+    while IFS= read -r -d '' old_file; do
+        original_file="${old_file%.old}"
+        if [ ! -e "$original_file" ]; then
+            if mv -- "$old_file" "$original_file"; then
+                echo -e "${YELLOW}Restored an ISO left by an interrupted compact conversion:${RESET} $original_file"
+            else
+                echo -e "${RED}Could not restore interrupted source ISO:${RESET} $original_file" >&2
+                return 1
+            fi
+        fi
+    done < <(find "$input_path" -type f -iname '*.iso.old' -print0)
+}
+
+choose_conversion_mode() {
+    local choice
+
+    conversion_mode="${conversion_mode,,}"
+    case "$conversion_mode" in
+        compact|fast) return 0 ;;
+        '') ;;
+        *)
+            echo -e "${RED}ISO2GOD_MODE must be 'compact' or 'fast'.${RESET}" >&2
+            return 1
+            ;;
+    esac
+
+    while true; do
+        echo
+        echo -e "${GREEN}ISO2GOD conversion mode${RESET}"
+        echo -e "  ${GREEN}1) Compact${RESET}  Smaller output; rebuilds each ISO first"
+        echo -e "  ${YELLOW}2) Fast${RESET}     Quicker; uses less temporary space"
+        echo -e "  ${RED}3) Cancel${RESET}"
+        echo
+        read -r -p 'Select a mode [1-3]: ' choice
+        case "$choice" in
+            1) conversion_mode='compact'; return 0 ;;
+            2) conversion_mode='fast'; return 0 ;;
+            3) return 130 ;;
+            *) echo -e "${RED}Invalid choice.${RESET}" ;;
+        esac
+    done
+}
+
+compact_rewrite() {
+    local source_iso="$1"
+    local rebuilt_dir="$2"
+    local source_old="${source_iso}.old"
+    local source_size
+    local available_bytes
+    local rewrite_status
+    local restore_status=0
+    local rebuilt_iso=''
+
+    COMPACT_SOURCE=''
+
+    if [ -e "$source_old" ]; then
+        echo -e "${RED}Cannot compact while this recovery file exists:${RESET} $source_old" >&2
+        return 1
+    fi
+
+    source_size=$(stat -c '%s' -- "$source_iso") || return 1
+    available_bytes=$(df -PB1 -- "$output_path" | awk 'NR == 2 {print $4}')
+    if [[ "$available_bytes" =~ ^[0-9]+$ ]] && [ "$available_bytes" -lt "$source_size" ]; then
+        echo -e "${RED}Not enough free space for the temporary compact ISO.${RESET}" >&2
+        echo "Needed: $source_size bytes; available: $available_bytes bytes." >&2
+        return 1
+    fi
+
+    mkdir -p -- "$rebuilt_dir"
+    ACTIVE_ORIGINAL="$source_iso"
+    ACTIVE_OLD="$source_old"
+
+    extract-xiso -r "$source_iso" -d "$rebuilt_dir"
+    rewrite_status=$?
+    restore_active_original || restore_status=$?
+
+    if [ "$restore_status" -ne 0 ]; then
+        return 1
+    fi
+    if [ "$rewrite_status" -ne 0 ]; then
+        echo -e "${RED}Extract-XISO could not rebuild:${RESET} $(basename -- "$source_iso")" >&2
+        return 1
+    fi
+
+    rebuilt_iso=$(find "$rebuilt_dir" -type f -iname '*.iso' -print -quit)
+    if [ -n "$rebuilt_iso" ]; then
+        COMPACT_SOURCE="$rebuilt_iso"
     else
-        echo -e "\e[31mFailed to rewrite ISO file $file_name.\e[0m"
+        # Extract-XISO creates no replacement when the source is already optimized.
+        COMPACT_SOURCE="$source_iso"
+        echo -e "${YELLOW}ISO is already compact; converting it directly.${RESET}"
     fi
 }
 
-# Function to convert rebuilt ISO to GOD
-convert_to_god() {
-    local rewritten_iso="$1"
-    local file_name=$(basename -- "$rewritten_iso")
+read_title_id() {
+    local iso_file="$1"
+    "$iso2god_bin" --dry-run "$iso_file" "$output_path" 2>/dev/null |
+        awk '/^[[:space:]]*Title ID:/ {print $3; exit}'
+}
 
-    echo -e "\e[32mConverting rebuilt ISO file $file_name to GOD...\e[0m"
-    (cd && ./iso2god-rs/target/release/iso2god "$rewritten_iso" "$output_path")
-    if [ $? -eq 0 ]; then
-        echo -e "\e[32mGOD file for $file_name created successfully.\e[0m"
-        # Delete rebuilt ISO if chose not to keep it
-        if [ "$choice" == "2" ]; then
-            rm -f "$rewritten_iso"
-            echo -e "\e[32mRebuilt ISO file $file_name deleted.\e[0m"
+convert_iso_to_god() {
+    local iso_file="$1"
+    local file_name
+    local title_id
+    local expected_target=''
+    local staging_root
+    local staged_output
+    local rebuilt_dir
+    local title_dir=''
+    local actual_target
+    local conversion_source="$iso_file"
+    local conversion_succeeded=false
+
+    file_name=$(basename -- "$iso_file")
+    ((ATTEMPTED++))
+
+    title_id=$(read_title_id "$iso_file" || true)
+    if [[ "$title_id" =~ ^[[:xdigit:]]{8}$ ]]; then
+        expected_target="$output_path/${title_id^^}"
+        select_output_action "$expected_target"
+        handle_selected_action
+        if [ "$?" -eq 10 ]; then
+            echo -e "${YELLOW}Skipped:${RESET} $file_name"
+            return 0
+        fi
+    fi
+
+    make_temp_dir "$output_path/.iso2god-stage.XXXXXX" || {
+        ((FAILED++))
+        return 1
+    }
+    staging_root="$TEMP_DIR"
+    staged_output="$staging_root/output"
+    rebuilt_dir="$staging_root/rebuilt"
+    mkdir -p -- "$staged_output"
+
+    if [ "$conversion_mode" = 'compact' ]; then
+        echo -e "${GREEN}Compact mode: rebuilding $file_name before conversion...${RESET}"
+        if compact_rewrite "$iso_file" "$rebuilt_dir"; then
+            conversion_source="$COMPACT_SOURCE"
+            if "$iso2god_bin" -j "$threads" "$conversion_source" "$staged_output"; then
+                conversion_succeeded=true
+            fi
         fi
     else
-        echo -e "\e[31mFailed to convert $file_name to GOD.\e[0m"
+        echo -e "${GREEN}Fast mode: converting $file_name directly with ${threads} workers...${RESET}"
+        if "$iso2god_bin" -j "$threads" "$iso_file" "$staged_output"; then
+            conversion_succeeded=true
+        else
+            echo -e "${YELLOW}Direct conversion failed. Trying the compact rebuild fallback...${RESET}"
+            rm -rf -- "$staged_output"
+            mkdir -p -- "$staged_output"
+            if compact_rewrite "$iso_file" "$rebuilt_dir"; then
+                conversion_source="$COMPACT_SOURCE"
+                if "$iso2god_bin" -j "$threads" "$conversion_source" "$staged_output"; then
+                    conversion_succeeded=true
+                fi
+            fi
+        fi
     fi
+
+    if [ "$conversion_succeeded" != true ]; then
+        ((FAILED++))
+        echo -e "${RED}Conversion failed:${RESET} $file_name" >&2
+        remove_temp_dir "$staging_root"
+        return 1
+    fi
+
+    title_dir=$(find "$staged_output" -mindepth 1 -maxdepth 1 -type d -print -quit)
+    if [ -z "$title_dir" ]; then
+        ((FAILED++))
+        echo -e "${RED}ISO2GOD produced no title directory:${RESET} $file_name" >&2
+        remove_temp_dir "$staging_root"
+        return 1
+    fi
+
+    actual_target="$output_path/$(basename -- "$title_dir")"
+    if [ -z "$expected_target" ] || [ "$actual_target" != "$expected_target" ]; then
+        select_output_action "$actual_target"
+        handle_selected_action
+        if [ "$?" -eq 10 ]; then
+            echo -e "${YELLOW}Converted output discarded because the existing title was skipped:${RESET} $file_name"
+            remove_temp_dir "$staging_root"
+            return 0
+        fi
+    fi
+
+    if commit_staged_output "$title_dir" "$actual_target"; then
+        ((SUCCEEDED++))
+        echo -e "${GREEN}Created:${RESET} $actual_target"
+    else
+        ((FAILED++))
+        echo -e "${RED}Failed to commit GOD output:${RESET} $file_name" >&2
+    fi
+
+    remove_temp_dir "$staging_root"
 }
 
-# Loop through each ISO file in the input directory
-for iso_file in "$input_path"/*.iso; do
-    if [ -f "$iso_file" ]; then
-        rewrite_iso "$iso_file"
-        files_processed=true
-    fi
-done
-
-# Loop through each ZIP file in the input directory
-for zip_file in "$input_path"/*.zip; do
-    if [ -f "$zip_file" ]; then
-        # Create a temporary directory in the output path for extraction
-        temp_dir="$output_path/temporary"
-        mkdir -p "$temp_dir"
-
-        # Unzip the file
-        echo -e "\e[32mExtracting ZIP file $zip_file...\e[0m"
-        unzip -q "$zip_file" -d "$temp_dir"
-
-        # Find all ISO files in the unzipped content and rewrite them
-        for iso_file in "$temp_dir"/*.iso; do
-            if [ -f "$iso_file" ]; then
-                rewrite_iso "$iso_file"
-                files_processed=true
-            fi
-        done
-
-        # Clean up temporary directory
-        rm -rf "$temp_dir"
-        echo -e "\e[32mTemporary folder for unzipped ISOs was deleted successfully.\e[0m"
-    fi
-done
-
-# Check if any files were processed
-if [ "$files_processed" = false ]; then
-    echo -e "\e[33mNo ISO or ZIP files found to rewrite in the input directory.\e[0m"
-else
-    echo -e "\e[32mAll ISO files have been rebuilt and converted to GOD.\e[0m"
+recover_interrupted_sources || exit 1
+choose_conversion_mode
+mode_status=$?
+if [ "$mode_status" -eq 130 ]; then
+    echo 'Cancelled.'
+    exit 0
+elif [ "$mode_status" -ne 0 ]; then
+    exit "$mode_status"
 fi
+
+echo -e "${GREEN}Using ${conversion_mode} mode for every ISO in this run.${RESET}"
+
+while IFS= read -r -d '' iso_file; do
+    convert_iso_to_god "$iso_file"
+done < <(find "$input_path" -type f -iname '*.iso' -print0)
+
+while IFS= read -r -d '' zip_file; do
+    make_temp_dir "$output_path/.iso2god-zip.XXXXXX" || {
+        ((ATTEMPTED++))
+        ((FAILED++))
+        continue
+    }
+    zip_temp="$TEMP_DIR"
+    echo -e "${GREEN}Extracting archive:${RESET} $zip_file"
+    if unzip -q "$zip_file" -d "$zip_temp"; then
+        while IFS= read -r -d '' iso_file; do
+            convert_iso_to_god "$iso_file"
+        done < <(find "$zip_temp" -type f -iname '*.iso' -print0)
+    else
+        ((ATTEMPTED++))
+        ((FAILED++))
+        echo -e "${RED}Failed to extract:${RESET} $zip_file" >&2
+    fi
+    remove_temp_dir "$zip_temp"
+done < <(find "$input_path" -type f -iname '*.zip' -print0)
+
+if [ "$ATTEMPTED" -eq 0 ]; then
+    echo -e "${YELLOW}No ISO or ZIP files were found.${RESET}"
+fi
+
+finish_with_summary
 EOT
 
 chmod +x "rom scripts/iso2god.sh"
@@ -389,81 +923,88 @@ echo -e "\e[32mCreating chdcreatecd.sh script...\e[0m"
 cat << 'EOT' > "rom scripts/chdcreatecd.sh"
 #!/bin/bash
 
-# Directory containing input files for createcd (BIN/CUE, ISO, and GDI)
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
+
 INPUT_DIR="/storage/emulated/0/Download/Roms/CD Input"
-# Output directory for CHD files
 OUTPUT_DIR="/storage/emulated/0/Download/Roms/CD Output"
 
-# Create output directory if it doesn't exist
-mkdir -p "$OUTPUT_DIR"
+mkdir -p "$INPUT_DIR" "$OUTPUT_DIR"
 
-# Enable nullglob and globstar to handle cases with no files found and to support recursive globbing
-shopt -s nullglob globstar
+convert_cd_image() {
+    local source_file="$1"
+    local file_name
+    local base_name
+    local target
+    local staging_root
+    local staged_chd
 
-# Function to process CUE files
-process_cue_files() {
-  for cue_file in "$1"/**/*.cue; do
-    if [ -e "$cue_file" ]; then
-      base_name=$(basename "$cue_file" .cue)
-      chd_file="$OUTPUT_DIR/$base_name.chd"
-      echo -e "\e[32mProcessing CUE file: $cue_file\e[0m"
-      chdman createcd -i "$cue_file" -o "$chd_file"
+    file_name=$(basename -- "$source_file")
+    base_name="${file_name%.*}"
+    target="$OUTPUT_DIR/$base_name.chd"
+    ((ATTEMPTED++))
+
+    select_output_action "$target"
+    handle_selected_action
+    if [ "$?" -eq 10 ]; then
+        echo -e "${YELLOW}Skipped:${RESET} $file_name"
+        return 0
     fi
-  done
+
+    make_temp_dir "$OUTPUT_DIR/.chdcd.XXXXXX" || {
+        ((FAILED++))
+        return 1
+    }
+    staging_root="$TEMP_DIR"
+    staged_chd="$staging_root/$base_name.chd"
+
+    echo -e "${GREEN}Creating CHD from $file_name...${RESET}"
+    if chdman createcd -i "$source_file" -o "$staged_chd" &&
+       commit_staged_output "$staged_chd" "$target"; then
+        ((SUCCEEDED++))
+        echo -e "${GREEN}Created:${RESET} $target"
+    else
+        ((FAILED++))
+        echo -e "${RED}Failed:${RESET} $file_name" >&2
+    fi
+
+    remove_temp_dir "$staging_root"
 }
 
-# Function to process ISO files
-process_iso_files() {
-  for iso_file in "$1"/**/*.iso; do
-    if [ -e "$iso_file" ]; then
-      base_name=$(basename "$iso_file" .iso)
-      chd_file="$OUTPUT_DIR/$base_name.chd"
-      echo -e "\e[32mProcessing ISO file: $iso_file\e[0m"
-      chdman createcd -i "$iso_file" -o "$chd_file"
-    fi
-  done
+process_cd_tree() {
+    local search_root="$1"
+    local source_file
+    while IFS= read -r -d '' source_file; do
+        convert_cd_image "$source_file"
+    done < <(find "$search_root" -type f \( -iname '*.cue' -o -iname '*.iso' -o -iname '*.gdi' \) -print0)
 }
 
-# Function to process GDI files
-process_gdi_files() {
-  for gdi_file in "$1"/**/*.gdi; do
-    if [ -e "$gdi_file" ]; then
-      base_name=$(basename "$gdi_file" .gdi)
-      data_files=("$1/${base_name}"*.bin "$1/${base_name}"*.raw)
-      chd_file="$OUTPUT_DIR/$base_name.chd"
-      echo -e "\e[32mProcessing GDI file: $gdi_file\e[0m"
-      chdman createcd -i "$gdi_file" -o "$chd_file"
+process_cd_tree "$INPUT_DIR"
+
+while IFS= read -r -d '' zip_file; do
+    make_temp_dir "$OUTPUT_DIR/.chdcd-zip.XXXXXX" || {
+        ((ATTEMPTED++))
+        ((FAILED++))
+        continue
+    }
+    zip_temp="$TEMP_DIR"
+    echo -e "${GREEN}Extracting archive:${RESET} $zip_file"
+    if unzip -q "$zip_file" -d "$zip_temp"; then
+        process_cd_tree "$zip_temp"
+    else
+        ((ATTEMPTED++))
+        ((FAILED++))
+        echo -e "${RED}Failed to extract:${RESET} $zip_file" >&2
     fi
-  done
-}
+    remove_temp_dir "$zip_temp"
+done < <(find "$INPUT_DIR" -type f -iname '*.zip' -print0)
 
-# Process unzipped files in the INPUT_DIR and its subdirectories
-process_cue_files "$INPUT_DIR"
-process_iso_files "$INPUT_DIR"
-process_gdi_files "$INPUT_DIR"
-
-# Process ZIP archives
-for zip_file in "$INPUT_DIR"/**/*.zip; do
-  if [ -e "$zip_file" ]; then
-    temp_dir="$OUTPUT_DIR/$(basename "$zip_file" .zip)"
-    mkdir -p "$temp_dir"
-    echo -e "\e[32mExtracting: $zip_file\e[0m"
-    unzip -q "$zip_file" -d "$temp_dir"
-
-    # Process extracted files
-    process_cue_files "$temp_dir"
-    process_iso_files "$temp_dir"
-    process_gdi_files "$temp_dir"
-
-    rm -rf "$temp_dir"
-    echo -e "\e[32mTemporary folder $temp_dir successfully deleted.\e[0m"
-  fi
-done
-
-# Check if no files were processed and print a message
-if [ ! "$(find "$INPUT_DIR" -type f \( -name '*.cue' -o -name '*.iso' -o -name '*.gdi' -o -name '*.zip' \) -print -quit)" ]; then
-  echo -e "\e[33mNo CUE, ISO, GDI, or ZIP files found in $INPUT_DIR or its subdirectories\e[0m"
+if [ "$ATTEMPTED" -eq 0 ]; then
+    echo -e "${YELLOW}No CUE, ISO, GDI or ZIP files were found.${RESET}"
 fi
+
+finish_with_summary
 EOT
 
 chmod +x "rom scripts/chdcreatecd.sh"
@@ -472,80 +1013,170 @@ echo -e "\e[32mCreating chdcreatedvd.sh script...\e[0m"
 cat << 'EOT' > "rom scripts/chdcreatedvd.sh"
 #!/bin/bash
 
-# Directory containing input files for createdvd (ISO and BIN/CUE)
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
+
 INPUT_DIR="/storage/emulated/0/Download/Roms/DVD Input"
-# Output directory for CHD files
 OUTPUT_DIR="/storage/emulated/0/Download/Roms/DVD Output"
 
-# Create output directory if it doesn't exist
-mkdir -p "$OUTPUT_DIR"
+mkdir -p "$INPUT_DIR" "$OUTPUT_DIR"
 
-# Enable nullglob and globstar to handle cases with no files found and to support recursive globbing
-shopt -s nullglob globstar
+convert_dvd_image() {
+    local source_file="$1"
+    local file_name
+    local base_name
+    local extension
+    local target
+    local staging_root
+    local staged_chd
 
-# Function to process CUE files
-process_cue_files() {
-  for cue_file in "$1"/**/*.cue; do
-    if [ -e "$cue_file" ]; then
-      base_name=$(basename "$cue_file" .cue)
-      chd_file="$OUTPUT_DIR/$base_name.chd"
-      echo -e "\e[32mProcessing CUE file: $cue_file\e[0m"
-      chdman createdvd -i "$cue_file" -o "$chd_file"
+    file_name=$(basename -- "$source_file")
+    base_name="${file_name%.*}"
+    extension="${file_name##*.}"
+    target="$OUTPUT_DIR/$base_name.chd"
+    ((ATTEMPTED++))
+
+    select_output_action "$target"
+    handle_selected_action
+    if [ "$?" -eq 10 ]; then
+        echo -e "${YELLOW}Skipped:${RESET} $file_name"
+        return 0
     fi
-  done
+
+    make_temp_dir "$OUTPUT_DIR/.chddvd.XXXXXX" || {
+        ((FAILED++))
+        return 1
+    }
+    staging_root="$TEMP_DIR"
+    staged_chd="$staging_root/$base_name.chd"
+
+    echo -e "${GREEN}Creating DVD CHD from $file_name...${RESET}"
+    if [ "${extension,,}" = 'iso' ]; then
+        chdman createdvd -hs 2048 -i "$source_file" -o "$staged_chd"
+        conversion_status=$?
+    else
+        chdman createdvd -i "$source_file" -o "$staged_chd"
+        conversion_status=$?
+    fi
+
+    if [ "$conversion_status" -eq 0 ] &&
+       commit_staged_output "$staged_chd" "$target"; then
+        ((SUCCEEDED++))
+        echo -e "${GREEN}Created:${RESET} $target"
+    else
+        ((FAILED++))
+        echo -e "${RED}Failed:${RESET} $file_name" >&2
+    fi
+
+    remove_temp_dir "$staging_root"
 }
 
-# Function to process ISO files
-process_iso_files() {
-  for iso_file in "$1"/**/*.iso; do
-    if [ -e "$iso_file" ]; then
-      base_name=$(basename "$iso_file" .iso)
-      chd_file="$OUTPUT_DIR/$base_name.chd"
-      echo -e "\e[32mProcessing ISO file: $iso_file\e[0m"
-      chdman createdvd -hs 2048 -i "$iso_file" -o "$chd_file"
-    fi
-  done
+process_dvd_tree() {
+    local search_root="$1"
+    local source_file
+    while IFS= read -r -d '' source_file; do
+        convert_dvd_image "$source_file"
+    done < <(find "$search_root" -type f \( -iname '*.cue' -o -iname '*.iso' \) -print0)
 }
 
-# Process unzipped files in the INPUT_DIR and its subdirectories
-process_cue_files "$INPUT_DIR"
-process_iso_files "$INPUT_DIR"
+process_dvd_tree "$INPUT_DIR"
 
-# Process ZIP archives
-for zip_file in "$INPUT_DIR"/**/*.zip; do
-  if [ -e "$zip_file" ]; then
-    temp_dir="$OUTPUT_DIR/$(basename "$zip_file" .zip)"
-    mkdir -p "$temp_dir"
-    echo -e "\e[32mExtracting: $zip_file\e[0m"
-    unzip -q "$zip_file" -d "$temp_dir"
+while IFS= read -r -d '' zip_file; do
+    make_temp_dir "$OUTPUT_DIR/.chddvd-zip.XXXXXX" || {
+        ((ATTEMPTED++))
+        ((FAILED++))
+        continue
+    }
+    zip_temp="$TEMP_DIR"
+    echo -e "${GREEN}Extracting archive:${RESET} $zip_file"
+    if unzip -q "$zip_file" -d "$zip_temp"; then
+        process_dvd_tree "$zip_temp"
+    else
+        ((ATTEMPTED++))
+        ((FAILED++))
+        echo -e "${RED}Failed to extract:${RESET} $zip_file" >&2
+    fi
+    remove_temp_dir "$zip_temp"
+done < <(find "$INPUT_DIR" -type f -iname '*.zip' -print0)
 
-    # Process extracted files
-    process_cue_files "$temp_dir"
-    process_iso_files "$temp_dir"
-
-    rm -rf "$temp_dir"
-    echo -e "\e[32mTemporary folder $temp_dir successfully deleted.\e[0m"
-  fi
-done
-
-# Check if no files were processed and print a message
-if [ ! "$(find "$INPUT_DIR" -type f \( -name '*.cue' -o -name '*.iso' -o -name '*.zip' \) -print -quit)" ]; then
-  echo -e "\e[33mNo CUE, ISO, or ZIP files found in $INPUT_DIR or its subdirectories\e[0m"
+if [ "$ATTEMPTED" -eq 0 ]; then
+    echo -e "${YELLOW}No CUE, ISO or ZIP files were found.${RESET}"
 fi
+
+finish_with_summary
 EOT
 
 chmod +x "rom scripts/chdcreatedvd.sh"
 
+echo -e "\e[32mVerifying the completed installation...\e[0m"
+
+required_commands=(extract-xiso chdman zarchive iso2god)
+for required_command in "${required_commands[@]}"; do
+    if ! command -v "$required_command" >/dev/null 2>&1; then
+        echo -e "\e[31mVerification failed: $required_command is unavailable.\e[0m" >&2
+        exit 1
+    fi
+done
+
+if ! file_sha256_matches "$ISO2GOD_BIN" "$ISO2GOD_SHA256"; then
+    echo -e "\e[31mVerification failed: the ISO2GOD executable checksum is incorrect.\e[0m" >&2
+    exit 1
+fi
+
+required_scripts=(
+    common.sh
+    iso2xex.sh
+    iso2zar.sh
+    xex2zar.sh
+    iso2god.sh
+    chdcreatecd.sh
+    chdcreatedvd.sh
+)
+
+for required_script in "${required_scripts[@]}"; do
+    if [ ! -x "$HOME/rom scripts/$required_script" ]; then
+        echo -e "\e[31mVerification failed: $required_script is missing or not executable.\e[0m" >&2
+        exit 1
+    fi
+done
+
+echo -e "\e[32mInstallation verified successfully.\e[0m"
+
 EOF
+then
+    echo -e "\e[31mUbuntu setup or verification failed. convert.sh was not created.\e[0m" >&2
+    exit 1
+fi
+
+case "$0" in
+    *.sh)
+        if [ -f "$0" ] && grep -q "SCRIPT_VERSION='3.2.0'" "$0"; then
+            source_installer=$(readlink -f "$0")
+            saved_installer="$HOME/setup_complete_optimized.sh"
+            if [ "$source_installer" != "$saved_installer" ]; then
+                install -m 0755 "$source_installer" "$saved_installer"
+            fi
+        fi
+        ;;
+esac
 
 echo -e "\e[32mCreating convert.sh script...\e[0m"
 cat << 'EOT' > convert.sh
-
 #!/data/data/com.termux/files/usr/bin/bash
+
+set -Eeuo pipefail
+
+CYAN='\e[36m'
+GREEN='\e[32m'
+YELLOW='\e[33m'
+RED='\e[31m'
+BOLD='\e[1m'
+RESET='\e[0m'
 
 # Function to run a script in the Ubuntu environment
 run_script_in_ubuntu() {
-  case $1 in
+  case "$1" in
     1)
       proot-distro login ubuntu -- bash -c "cd ~/\"rom scripts\" && ./chdcreatecd.sh"
       ;;
@@ -564,24 +1195,38 @@ run_script_in_ubuntu() {
     6)
       proot-distro login ubuntu -- bash -c "cd ~/\"rom scripts\" && ./iso2god.sh"
       ;;
+    7)
+      "$HOME/setup_complete_optimized.sh" --normal
+      ;;
+    8)
+      "$HOME/setup_complete_optimized.sh" --update
+      ;;
     *)
-      echo -e "\e[31mInvalid choice. Please select a number between 1 and 6.\e[0m"
+      echo -e "\e[31mInvalid choice. Please select a number between 1 and 8.\e[0m"
+      return 2
       ;;
   esac
 }
 
 # Display menu and prompt for user input
-echo -e "\e[36m1) chdcreatecd.sh\e[0m"
-echo -e "\e[33m2) chdcreatedvd.sh\e[0m"
-echo -e "\e[36m3) iso2xex.sh\e[0m"
-echo -e "\e[33m4) xex2zar.sh\e[0m"
-echo -e "\e[36m5) iso2zar.sh\e[0m"
-echo -e "\e[33m6) iso2god.sh\e[0m"
+echo
+echo -e "${BOLD}${CYAN}ROM Conversion Tools${RESET}"
+echo -e "  ${CYAN}1)${RESET} ${GREEN}Convert CD image to CHD${RESET}       CD compression"
+echo -e "  ${CYAN}2)${RESET} ${GREEN}Convert DVD image to CHD${RESET}      DVD compression"
+echo -e "  ${CYAN}3)${RESET} ${GREEN}Extract Xbox ISO to XEX${RESET}"
+echo -e "  ${CYAN}4)${RESET} ${GREEN}Compress XEX folder to ZAR${RESET}"
+echo -e "  ${CYAN}5)${RESET} ${GREEN}Convert Xbox ISO to ZAR${RESET}"
+echo -e "  ${CYAN}6)${RESET} ${GREEN}Convert Xbox 360 ISO to GOD${RESET}"
+echo
+echo -e "${BOLD}${YELLOW}Maintenance${RESET}"
+echo -e "  ${YELLOW}7)${RESET} Repair conversion tools"
+echo -e "  ${YELLOW}8)${RESET} Update packages and repair tools"
+echo
 
-read -p "Enter your choice (1-6): " choice
+read -r -p "Select an option [1-8]: " choice
 
 # Run the script in the Ubuntu environment
-run_script_in_ubuntu $choice
+run_script_in_ubuntu "$choice"
 
 # Exit the script
 exit 0
@@ -593,10 +1238,3 @@ chmod +x convert.sh
 echo -e "\e[35mSetup complete\e[0m"
 echo -e "\e[32mTo use the conversion scripts, open Termux and type:\e[0m"
 echo -e "\e[34m./convert.sh\e[0m"
-echo -e "\e[32mThen choose the desired script:\e[0m"
-echo -e "\e[34m./chdcreatecd.sh\e[0m" 
-echo -e "\e[34m./chdcreatedvd.sh\e[0m"
-echo -e "\e[34m./iso2xex.sh\e[0m"
-echo -e "\e[34m./xex2zar.sh\e[0m"
-echo -e "\e[34m./iso2zar.sh\e[0m"
-echo -e "\e[34m./iso2god.sh\e[0m"
