@@ -1238,3 +1238,4 @@ chmod +x convert.sh
 echo -e "\e[35mSetup complete\e[0m"
 echo -e "\e[32mTo use the conversion scripts, open Termux and type:\e[0m"
 echo -e "\e[34m./convert.sh\e[0m"
+
