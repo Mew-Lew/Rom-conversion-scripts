@@ -7,16 +7,8 @@ source "$SCRIPT_DIR/common.sh"
 
 INPUT_DIR="$ROM_ROOT/DVD Input"
 OUTPUT_DIR="$ROM_ROOT/DVD Output"
-THREADS="${CHDMAN_THREADS:-2}"
 mkdir -p -- "$INPUT_DIR" "$OUTPUT_DIR"
 require_commands chdman find mktemp unzip
-
-case "$THREADS" in
-    ''|*[!0-9]*|0)
-        printf '%bInvalid CHDMAN_THREADS value; using 2.%b\n' "$YELLOW" "$RESET"
-        THREADS=2
-        ;;
-esac
 
 convert_dvd_image() {
     local source_file="$1"
@@ -36,13 +28,12 @@ convert_dvd_image() {
     staging_root="$TEMP_DIR"
     staged_chd="$staging_root/$base_name.chd"
 
-    printf '%bCreating DVD CHD from %s with %s workers...%b\n' \
-        "$GREEN" "$file_name" "$THREADS" "$RESET"
+    printf '%bCreating DVD CHD from %s...%b\n' "$GREEN" "$file_name" "$RESET"
     if [[ "${extension,,}" == 'iso' ]]; then
-        if chdman createdvd -np "$THREADS" -hs 2048 -i "$source_file" -o "$staged_chd"; then
+        if chdman createdvd -hs 2048 -i "$source_file" -o "$staged_chd"; then
             conversion_succeeded=true
         fi
-    elif chdman createdvd -np "$THREADS" -i "$source_file" -o "$staged_chd"; then
+    elif chdman createdvd -i "$source_file" -o "$staged_chd"; then
         conversion_succeeded=true
     fi
 

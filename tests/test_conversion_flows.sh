@@ -146,54 +146,9 @@ test_iso2god_mode() {
     esac
 }
 
-write_chdman_mock() {
-    local mock_path="$1"
-    cat > "$mock_path" <<'MOCK'
-#!/usr/bin/env bash
-set -Eeuo pipefail
-
-printf '%s\n' "$@" > "$MOCK_LOG"
-while (( $# > 0 )); do
-    case "$1" in
-        -o) output_path="$2"; shift 2 ;;
-        *) shift ;;
-    esac
-done
-mkdir -p -- "$(dirname -- "$output_path")"
-: > "$output_path"
-MOCK
-    chmod +x "$mock_path"
-}
-
-test_chd_threads() {
-    local conversion="$1"
-    local script_path="$2"
-    local test_root="$TEST_ROOT/chd-$conversion"
-    local installed_dir="$test_root/installed"
-    local mock_dir="$test_root/mock-bin"
-    local rom_root="$test_root/Roms"
-    local input_dir="$rom_root/$conversion Input"
-    local log_path="$test_root/chdman.log"
-
-    mkdir -p -- "$installed_dir" "$mock_dir" "$input_dir"
-    cp -- "$REPOSITORY_ROOT/$script_path" "$installed_dir/converter.sh"
-    cp -- "$REPOSITORY_ROOT/common.sh" "$installed_dir/common.sh"
-    write_chdman_mock "$mock_dir/chdman"
-    write_unzip_mock "$mock_dir/unzip"
-    : > "$input_dir/game.iso"
-
-    MOCK_LOG="$log_path" PATH="$mock_dir:$PATH" ROM_ROOT="$rom_root" \
-        CHDMAN_THREADS=4 bash "$installed_dir/converter.sh" > /dev/null
-
-    assert_file_contains "$log_path" '-np'
-    assert_file_contains "$log_path" '4'
-}
-
 test_batch_output_action
 test_iso2god_mode untouched
 test_iso2god_mode partial
 test_iso2god_mode remove-all
-test_chd_threads CD 'CHD/chdcreatecd.sh'
-test_chd_threads DVD 'CHD/chdcreatedvd.sh'
 
 printf 'All conversion flow tests passed.\n'

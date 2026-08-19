@@ -7,16 +7,8 @@ source "$SCRIPT_DIR/common.sh"
 
 INPUT_DIR="$ROM_ROOT/CD Input"
 OUTPUT_DIR="$ROM_ROOT/CD Output"
-THREADS="${CHDMAN_THREADS:-2}"
 mkdir -p -- "$INPUT_DIR" "$OUTPUT_DIR"
 require_commands chdman find mktemp unzip
-
-case "$THREADS" in
-    ''|*[!0-9]*|0)
-        printf '%bInvalid CHDMAN_THREADS value; using 2.%b\n' "$YELLOW" "$RESET"
-        THREADS=2
-        ;;
-esac
 
 convert_cd_image() {
     local source_file="$1"
@@ -37,9 +29,8 @@ convert_cd_image() {
     staging_root="$TEMP_DIR"
     staged_chd="$staging_root/$base_name.chd"
 
-    printf '%bCreating CHD from %s with %s workers...%b\n' \
-        "$GREEN" "$file_name" "$THREADS" "$RESET"
-    if chdman createcd -np "$THREADS" -i "$source_file" -o "$staged_chd" &&
+    printf '%bCreating CHD from %s...%b\n' "$GREEN" "$file_name" "$RESET"
+    if chdman createcd -i "$source_file" -o "$staged_chd" &&
        commit_staged_output "$staged_chd" "$target"; then
         ((++SUCCEEDED))
         printf '%bCreated:%b %s\n' "$GREEN" "$RESET" "$target"

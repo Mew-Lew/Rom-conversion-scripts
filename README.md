@@ -29,7 +29,7 @@ The installer uses Ubuntu through `proot-distro`. Root access is not required.
 Open Termux and run:
 
 ```bash
-pkg install -y curl && curl -fL --retry 3 https://raw.githubusercontent.com/Mew-Lew/Rom-conversion-scripts/v3.5.0/setup_complete_optimized.sh -o setup.sh && bash setup.sh
+pkg install -y curl && curl -fL --retry 3 https://raw.githubusercontent.com/Mew-Lew/Rom-conversion-scripts/v3.5.1/setup_complete_optimized.sh -o setup.sh && bash setup.sh
 ```
 
 This downloads and runs the installer.
@@ -104,16 +104,15 @@ When output already exists, the script gives you these options:
 
 Conversions are written to a temporary staging directory first. Existing output is not replaced until the new conversion has completed successfully.
 
-## Performance settings
+## ISO2GOD performance setting
 
-Both settings default to two workers. Increase them carefully on devices with enough memory, cooling, and free storage:
+ISO2GOD uses two workers by default. Increase the setting carefully on devices with enough memory, cooling, and free storage:
 
 ```bash
 ISO2GOD_THREADS=4 ./convert.sh
-CHDMAN_THREADS=4 ./convert.sh
 ```
 
-`ISO2GOD_THREADS` controls ISO2GOD conversion workers. `CHDMAN_THREADS` passes the selected worker count to CHDMAN compression for CD and DVD conversions.
+`ISO2GOD_THREADS` controls ISO2GOD conversion workers.
 
 ## Download verification
 

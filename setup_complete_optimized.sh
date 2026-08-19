@@ -11,8 +11,8 @@ MAGENTA='\e[35m'
 BOLD='\e[1m'
 RESET='\e[0m'
 
-SCRIPT_VERSION='3.5.0'
-ROM_SCRIPTS_REF="${ROM_SCRIPTS_REF:-v3.5.0}"
+SCRIPT_VERSION='3.5.1'
+ROM_SCRIPTS_REF="${ROM_SCRIPTS_REF:-v3.5.1}"
 REPOSITORY='Mew-Lew/Rom-conversion-scripts'
 RAW_BASE_URL="https://raw.githubusercontent.com/$REPOSITORY/$ROM_SCRIPTS_REF"
 CONVERT_SHA256='54b5d9b184c692d4e6e7a297fc01e891631dd1adce462c657b49b75a4df53f09'
@@ -236,8 +236,8 @@ INSTALL_TEMP_PATHS+=("$script_stage")
 # Repository path | installed filename | SHA-256
 SCRIPT_SPECS=(
     'common.sh|common.sh|9173a20e65aa83a9e33fc79f3f382c32170910b22b66442dcc292a5372f60ed6'
-    'CHD/chdcreatecd.sh|chdcreatecd.sh|b4a7feaf75e0d2a5413d241157ae9eda824f19fd883db63276d81de3af395d66'
-    'CHD/chdcreatedvd.sh|chdcreatedvd.sh|48d1aa519e9624864b6ecf9fcd2bdca6bba9f881e69109d3de7c6b311b4f0333'
+    'CHD/chdcreatecd.sh|chdcreatecd.sh|e63d2020896ffa36f4398d187547ecc813f0cb1492fb67559c7cfa547ebe3139'
+    'CHD/chdcreatedvd.sh|chdcreatedvd.sh|8bd1fc120dab821baf91e23cf4733f4c66d2b92271fc97de3cd2adeb4ef017c3'
     'ISO-XEX-ZAR/iso2xex/iso2xex.sh|iso2xex.sh|77975e6992146ff5315f4bba7acc1daca5d753c8b0a3ac07428b6993124bebd6'
     'ISO-XEX-ZAR/iso2zar/iso2zar.sh|iso2zar.sh|8d0fd02ac6f03b7e67725ccab3d638549ddf979ac58440a05c68186fa14baa44'
     'ISO-XEX-ZAR/xex2zar/xex2zar.sh|xex2zar.sh|83c89e193921e14574a32b29670db8592423f253b8caeabab579c6b823f2212f'
