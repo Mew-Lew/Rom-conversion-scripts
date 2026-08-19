@@ -29,7 +29,7 @@ The installer uses Ubuntu through `proot-distro`. Root access is not required.
 Open Termux and run:
 
 ```bash
-pkg install -y curl && curl -fL --retry 3 https://raw.githubusercontent.com/Mew-Lew/Rom-conversion-scripts/v3.4.0/setup_complete_optimized.sh -o setup.sh && bash setup.sh
+pkg install -y curl && curl -fL --retry 3 https://raw.githubusercontent.com/Mew-Lew/Rom-conversion-scripts/v3.5.0/setup_complete_optimized.sh -o setup.sh && bash setup.sh
 ```
 
 This downloads and runs the installer.
@@ -93,14 +93,27 @@ The original ISO is restored after a rebuild, including if the process is interr
 
 ## Existing output handling
 
-If output already exists for a game, the script gives you four options:
+When output already exists, the script gives you these options:
 
 1. **Skip** — leave the existing output untouched and move to the next item.
 2. **Replace** — replace the existing output only after the new conversion completes successfully.
 3. **Backup** — preserve the existing output as a timestamped backup before replacing it.
-4. **Cancel** — stop the current batch.
+4. **Skip all existing** — skip every remaining item that already has output.
+5. **Replace all existing** — replace every remaining existing output after each new conversion completes successfully.
+6. **Cancel batch** — stop the current batch.
 
 Conversions are written to a temporary staging directory first. Existing output is not replaced until the new conversion has completed successfully.
+
+## Performance settings
+
+Both settings default to two workers. Increase them carefully on devices with enough memory, cooling, and free storage:
+
+```bash
+ISO2GOD_THREADS=4 ./convert.sh
+CHDMAN_THREADS=4 ./convert.sh
+```
+
+`ISO2GOD_THREADS` controls ISO2GOD conversion workers. `CHDMAN_THREADS` passes the selected worker count to CHDMAN compression for CD and DVD conversions.
 
 ## Download verification
 

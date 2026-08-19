@@ -35,12 +35,11 @@ choose_conversion_mode() {
     esac
 
     while true; do
-        echo
-        printf '%bISO2GOD conversion mode%b\n' "$GREEN" "$RESET"
-        echo '1) Untouched   Standard conversion without trimming'
-        echo '2) Partial     Use ISO2GOD native trimming (--trim)'
-        echo '3) Remove all  Rebuild with extract-xiso, then convert'
-        echo '4) Cancel'
+        print_menu_heading 'ISO2GOD conversion mode'
+        print_menu_option 1 'Untouched' 'Standard conversion without trimming'
+        print_menu_option 2 'Partial' 'Use ISO2GOD native trimming (--trim)'
+        print_menu_option 3 'Remove all' 'Rebuild with extract-xiso, then convert'
+        print_menu_option 4 'Cancel' 'Return without converting files'
         read -r -p 'Select a mode [1-4]: ' choice
         case "$choice" in
             1) CONVERSION_MODE='untouched'; return 0 ;;

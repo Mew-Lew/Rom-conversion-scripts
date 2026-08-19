@@ -5,15 +5,17 @@ set -Eeuo pipefail
 GREEN='\e[32m'
 YELLOW='\e[33m'
 BLUE='\e[34m'
+CYAN='\e[36m'
 RED='\e[31m'
 MAGENTA='\e[35m'
+BOLD='\e[1m'
 RESET='\e[0m'
 
-SCRIPT_VERSION='3.4.0'
-ROM_SCRIPTS_REF="${ROM_SCRIPTS_REF:-v3.4.0}"
+SCRIPT_VERSION='3.5.0'
+ROM_SCRIPTS_REF="${ROM_SCRIPTS_REF:-v3.5.0}"
 REPOSITORY='Mew-Lew/Rom-conversion-scripts'
 RAW_BASE_URL="https://raw.githubusercontent.com/$REPOSITORY/$ROM_SCRIPTS_REF"
-CONVERT_SHA256='14a601b28ac1ecda374211256c30344cd2bcaa90861df554c862777babad0403'
+CONVERT_SHA256='54b5d9b184c692d4e6e7a297fc01e891631dd1adce462c657b49b75a4df53f09'
 
 TEMP_PATHS=()
 
@@ -42,6 +44,16 @@ usage() {
     echo '  --update  Upgrade Termux and Ubuntu packages, then install or repair tools'
 }
 
+print_menu_heading() {
+    printf '%b%b%s%b\n' "$BOLD" "$CYAN" "$1" "$RESET"
+}
+
+print_menu_option() {
+    local number="$1" label="$2" description="$3"
+    printf '  %b%s)%b %b%-24s%b %s\n' \
+        "$CYAN" "$number" "$RESET" "$GREEN" "$label" "$RESET" "$description"
+}
+
 case "${1:-}" in
     --normal|'') SETUP_MODE='normal' ;;
     --update) SETUP_MODE='update' ;;
@@ -50,10 +62,10 @@ case "${1:-}" in
 esac
 
 if (( $# == 0 )); then
-    printf '%bROM Conversion Scripts setup %s%b\n' "$GREEN" "$SCRIPT_VERSION" "$RESET"
-    printf '%b1) Normal setup or repair%b\n' "$BLUE" "$RESET"
-    printf '%b2) Update system packages, then setup or repair%b\n' "$YELLOW" "$RESET"
-    printf '%b3) Cancel%b\n' "$RED" "$RESET"
+    print_menu_heading "ROM Conversion Scripts setup $SCRIPT_VERSION"
+    print_menu_option 1 'Normal setup or repair' 'Install or repair tools without full upgrades'
+    print_menu_option 2 'Update and setup' 'Upgrade packages, then install or repair tools'
+    print_menu_option 3 'Cancel' 'Exit without changing the installation'
     read -r -p 'Enter your choice (1-3): ' setup_choice
     case "$setup_choice" in
         1) SETUP_MODE='normal' ;;
@@ -223,13 +235,13 @@ INSTALL_TEMP_PATHS+=("$script_stage")
 
 # Repository path | installed filename | SHA-256
 SCRIPT_SPECS=(
-    'common.sh|common.sh|4259cc13c4857cf2f55f7a9ef5420edaa28d8c0d570e83ec21542fcb06103a55'
-    'CHD/chdcreatecd.sh|chdcreatecd.sh|e63d2020896ffa36f4398d187547ecc813f0cb1492fb67559c7cfa547ebe3139'
-    'CHD/chdcreatedvd.sh|chdcreatedvd.sh|8bd1fc120dab821baf91e23cf4733f4c66d2b92271fc97de3cd2adeb4ef017c3'
+    'common.sh|common.sh|9173a20e65aa83a9e33fc79f3f382c32170910b22b66442dcc292a5372f60ed6'
+    'CHD/chdcreatecd.sh|chdcreatecd.sh|b4a7feaf75e0d2a5413d241157ae9eda824f19fd883db63276d81de3af395d66'
+    'CHD/chdcreatedvd.sh|chdcreatedvd.sh|48d1aa519e9624864b6ecf9fcd2bdca6bba9f881e69109d3de7c6b311b4f0333'
     'ISO-XEX-ZAR/iso2xex/iso2xex.sh|iso2xex.sh|77975e6992146ff5315f4bba7acc1daca5d753c8b0a3ac07428b6993124bebd6'
     'ISO-XEX-ZAR/iso2zar/iso2zar.sh|iso2zar.sh|8d0fd02ac6f03b7e67725ccab3d638549ddf979ac58440a05c68186fa14baa44'
     'ISO-XEX-ZAR/xex2zar/xex2zar.sh|xex2zar.sh|83c89e193921e14574a32b29670db8592423f253b8caeabab579c6b823f2212f'
-    'ISO2GOD/Iso2god.sh|iso2god.sh|695a5cca84fbab0b83f30e40785f461f8a3447183fbc81f48702f40fa27cddab'
+    'ISO2GOD/Iso2god.sh|iso2god.sh|6328abab91cdc41ca6632fa24a2b45da94082bbcf044503258853763ae48be14'
 )
 
 printf '%bDownloading verified conversion scripts...%b\n' "$GREEN" "$RESET"

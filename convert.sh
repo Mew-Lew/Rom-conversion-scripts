@@ -19,6 +19,16 @@ on_error() {
 }
 trap 'on_error "$LINENO"' ERR
 
+print_menu_heading() {
+    printf '%b%b%s%b\n' "$BOLD" "$CYAN" "$1" "$RESET"
+}
+
+print_menu_option() {
+    local number="$1" label="$2" description="$3"
+    printf '  %b%s)%b %b%-24s%b %s\n' \
+        "$CYAN" "$number" "$RESET" "$GREEN" "$label" "$RESET" "$description"
+}
+
 run_ubuntu_script() {
     local script_name="$1"
     proot-distro login ubuntu -- bash -c 'cd "$HOME/rom scripts" && exec "./$1"' bash "$script_name"
@@ -59,17 +69,17 @@ if ! command -v proot-distro >/dev/null 2>&1; then
 fi
 
 echo
-printf '%b%bROM Conversion Tools%b\n' "$BOLD" "$CYAN" "$RESET"
-printf '  %b1)%b %bConvert CD image to CHD%b       CD compression\n' "$CYAN" "$RESET" "$GREEN" "$RESET"
-printf '  %b2)%b %bConvert DVD image to CHD%b      DVD compression\n' "$CYAN" "$RESET" "$GREEN" "$RESET"
-printf '  %b3)%b %bExtract Xbox ISO to XEX%b\n' "$CYAN" "$RESET" "$GREEN" "$RESET"
-printf '  %b4)%b %bCompress XEX folder to ZAR%b\n' "$CYAN" "$RESET" "$GREEN" "$RESET"
-printf '  %b5)%b %bConvert Xbox ISO to ZAR%b\n' "$CYAN" "$RESET" "$GREEN" "$RESET"
-printf '  %b6)%b %bConvert Xbox 360 ISO to GOD%b\n' "$CYAN" "$RESET" "$GREEN" "$RESET"
+print_menu_heading 'ROM Conversion Tools'
+print_menu_option 1 'Convert CD image to CHD' 'CD compression'
+print_menu_option 2 'Convert DVD image to CHD' 'DVD compression'
+print_menu_option 3 'Extract Xbox ISO to XEX' 'Create an extracted game folder'
+print_menu_option 4 'Compress XEX folder to ZAR' 'Archive an extracted game folder'
+print_menu_option 5 'Convert Xbox ISO to ZAR' 'Extract and archive an Xbox ISO'
+print_menu_option 6 'Convert Xbox 360 ISO to GOD' 'Create a Games on Demand container'
 echo
-printf '%b%bMaintenance%b\n' "$BOLD" "$YELLOW" "$RESET"
-printf '  %b7)%b Repair conversion tools\n' "$YELLOW" "$RESET"
-printf '  %b8)%b Update packages and repair tools\n' "$YELLOW" "$RESET"
+print_menu_heading 'Maintenance'
+print_menu_option 7 'Repair conversion tools' 'Repair without a full package upgrade'
+print_menu_option 8 'Update packages and repair tools' 'Upgrade packages before repairing tools'
 echo
 
 read -r -p 'Select an option [1-8]: ' choice

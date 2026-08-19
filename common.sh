@@ -2,9 +2,11 @@
 
 set -Eeuo pipefail
 
+CYAN='\e[36m'
 GREEN='\e[32m'
 YELLOW='\e[33m'
 RED='\e[31m'
+BOLD='\e[1m'
 RESET='\e[0m'
 
 ROM_ROOT="${ROM_ROOT:-/storage/emulated/0/Download/Roms}"
@@ -15,6 +17,7 @@ SAFE_OUTPUT_ROOT="${SAFE_OUTPUT_ROOT%/}"
 TEMP_DIRS=()
 TEMP_DIR=''
 OUTPUT_ACTION='new'
+BATCH_OUTPUT_ACTION=''
 BACKUP_PATH=''
 
 ATTEMPTED=0
@@ -56,6 +59,16 @@ require_commands() {
         fi
     done
     (( missing == 0 ))
+}
+
+print_menu_heading() {
+    printf '\n%b%b%s%b\n' "$BOLD" "$CYAN" "$1" "$RESET"
+}
+
+print_menu_option() {
+    local number="$1" label="$2" description="$3"
+    printf '  %b%s)%b %b%-16s%b %s\n' \
+        "$CYAN" "$number" "$RESET" "$GREEN" "$label" "$RESET" "$description"
 }
 
 make_temp_dir() {
@@ -102,18 +115,28 @@ select_output_action() {
     OUTPUT_ACTION='new'
     [[ -e "$target" ]] || return 0
 
+    if [[ -n "$BATCH_OUTPUT_ACTION" ]]; then
+        OUTPUT_ACTION="$BATCH_OUTPUT_ACTION"
+        return 0
+    fi
+
     while true; do
+        print_menu_heading 'Existing output'
         printf '%bOutput already exists:%b %s\n' "$YELLOW" "$RESET" "$target"
-        echo '1) Skip this item'
-        echo '2) Replace it after the new conversion succeeds'
-        echo '3) Keep it as a timestamped backup'
-        echo '4) Cancel'
-        read -r -p 'Enter your choice (1-4): ' choice
+        print_menu_option 1 'Skip this item' 'Leave the existing output untouched'
+        print_menu_option 2 'Replace this item' 'Replace it after conversion succeeds'
+        print_menu_option 3 'Keep a backup' 'Move the existing output to a timestamped backup'
+        print_menu_option 4 'Skip all existing' 'Skip every remaining item with existing output'
+        print_menu_option 5 'Replace all existing' 'Replace every remaining item after conversion succeeds'
+        print_menu_option 6 'Cancel batch' 'Stop this conversion batch'
+        read -r -p 'Select an option [1-6]: ' choice
         case "$choice" in
             1) OUTPUT_ACTION='skip'; return 0 ;;
             2) OUTPUT_ACTION='overwrite'; return 0 ;;
             3) OUTPUT_ACTION='backup'; return 0 ;;
-            4) OUTPUT_ACTION='cancel'; return 0 ;;
+            4) BATCH_OUTPUT_ACTION='skip'; OUTPUT_ACTION='skip'; return 0 ;;
+            5) BATCH_OUTPUT_ACTION='overwrite'; OUTPUT_ACTION='overwrite'; return 0 ;;
+            6) OUTPUT_ACTION='cancel'; return 0 ;;
             *) printf '%bInvalid choice.%b\n' "$RED" "$RESET" ;;
         esac
     done
