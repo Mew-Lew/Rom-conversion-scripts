@@ -9,8 +9,8 @@ RED='\e[31m'
 MAGENTA='\e[35m'
 RESET='\e[0m'
 
-SCRIPT_VERSION='3.3.0'
-ROM_SCRIPTS_REF="${ROM_SCRIPTS_REF:-v3.3.0}"
+SCRIPT_VERSION='3.4.0'
+ROM_SCRIPTS_REF="${ROM_SCRIPTS_REF:-v3.4.0}"
 REPOSITORY='Mew-Lew/Rom-conversion-scripts'
 RAW_BASE_URL="https://raw.githubusercontent.com/$REPOSITORY/$ROM_SCRIPTS_REF"
 CONVERT_SHA256='14a601b28ac1ecda374211256c30344cd2bcaa90861df554c862777babad0403'
@@ -229,7 +229,7 @@ SCRIPT_SPECS=(
     'ISO-XEX-ZAR/iso2xex/iso2xex.sh|iso2xex.sh|77975e6992146ff5315f4bba7acc1daca5d753c8b0a3ac07428b6993124bebd6'
     'ISO-XEX-ZAR/iso2zar/iso2zar.sh|iso2zar.sh|8d0fd02ac6f03b7e67725ccab3d638549ddf979ac58440a05c68186fa14baa44'
     'ISO-XEX-ZAR/xex2zar/xex2zar.sh|xex2zar.sh|83c89e193921e14574a32b29670db8592423f253b8caeabab579c6b823f2212f'
-    'ISO2GOD/Iso2god.sh|iso2god.sh|3002e678dddbf11eda889d7d8ad66a4f070bb617411f84aee6f6d23dfa08665b'
+    'ISO2GOD/Iso2god.sh|iso2god.sh|695a5cca84fbab0b83f30e40785f461f8a3447183fbc81f48702f40fa27cddab'
 )
 
 printf '%bDownloading verified conversion scripts...%b\n' "$GREEN" "$RESET"

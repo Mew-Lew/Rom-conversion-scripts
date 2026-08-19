@@ -25,10 +25,11 @@ choose_conversion_mode() {
     local choice
     CONVERSION_MODE="${CONVERSION_MODE,,}"
     case "$CONVERSION_MODE" in
-        compact|fast) return 0 ;;
+        untouched|partial|remove-all) return 0 ;;
         '') ;;
         *)
-            printf '%bISO2GOD_MODE must be compact or fast.%b\n' "$RED" "$RESET" >&2
+            printf '%bISO2GOD_MODE must be untouched, partial, or remove-all.%b\n' \
+                "$RED" "$RESET" >&2
             return 2
             ;;
     esac
@@ -36,14 +37,16 @@ choose_conversion_mode() {
     while true; do
         echo
         printf '%bISO2GOD conversion mode%b\n' "$GREEN" "$RESET"
-        echo '1) Compact  Smaller output using ISO2GOD native trimming'
-        echo '2) Fast     Quicker conversion without trimming'
-        echo '3) Cancel'
-        read -r -p 'Select a mode [1-3]: ' choice
+        echo '1) Untouched   Standard conversion without trimming'
+        echo '2) Partial     Use ISO2GOD native trimming (--trim)'
+        echo '3) Remove all  Rebuild with extract-xiso, then convert'
+        echo '4) Cancel'
+        read -r -p 'Select a mode [1-4]: ' choice
         case "$choice" in
-            1) CONVERSION_MODE='compact'; return 0 ;;
-            2) CONVERSION_MODE='fast'; return 0 ;;
-            3) return 130 ;;
+            1) CONVERSION_MODE='untouched'; return 0 ;;
+            2) CONVERSION_MODE='partial'; return 0 ;;
+            3) CONVERSION_MODE='remove-all'; return 0 ;;
+            4) return 130 ;;
             *) printf '%bInvalid choice.%b\n' "$RED" "$RESET" ;;
         esac
     done
@@ -57,17 +60,116 @@ read_title_id() {
 
 run_iso2god() {
     local iso_file="$1" destination="$2"
-    if [[ "$CONVERSION_MODE" == 'compact' ]]; then
+    if [[ "$CONVERSION_MODE" == 'partial' ]]; then
         "$ISO2GOD_BIN" --trim -j "$THREADS" "$iso_file" "$destination"
     else
         "$ISO2GOD_BIN" -j "$THREADS" "$iso_file" "$destination"
     fi
 }
 
+ACTIVE_ORIGINAL=''
+ACTIVE_OLD=''
+REBUILT_ISO=''
+
+restore_active_original() {
+    [[ -n "$ACTIVE_ORIGINAL" ]] || return 0
+
+    if [[ ! -e "$ACTIVE_ORIGINAL" && -e "$ACTIVE_OLD" ]]; then
+        if ! mv -- "$ACTIVE_OLD" "$ACTIVE_ORIGINAL"; then
+            printf '%bCould not restore source ISO:%b %s\n' \
+                "$RED" "$RESET" "$ACTIVE_ORIGINAL" >&2
+            return 1
+        fi
+    elif [[ ! -e "$ACTIVE_ORIGINAL" && ! -e "$ACTIVE_OLD" ]]; then
+        printf '%bSource ISO and recovery file are both missing:%b %s\n' \
+            "$RED" "$RESET" "$ACTIVE_ORIGINAL" >&2
+        return 1
+    elif [[ -e "$ACTIVE_ORIGINAL" && -e "$ACTIVE_OLD" ]]; then
+        printf '%bBoth the source ISO and its .old file exist; refusing to overwrite either:%b %s\n' \
+            "$RED" "$RESET" "$ACTIVE_ORIGINAL" >&2
+        return 1
+    fi
+
+    ACTIVE_ORIGINAL=''
+    ACTIVE_OLD=''
+}
+
+cleanup_iso2god() {
+    restore_active_original || true
+    cleanup_temp_dirs
+}
+
+trap cleanup_iso2god EXIT
+trap 'cleanup_iso2god; exit 130' INT
+trap 'cleanup_iso2god; exit 143' TERM
+
+recover_interrupted_sources() {
+    local old_file original_file
+
+    while IFS= read -r -d '' old_file; do
+        original_file="${old_file%.old}"
+        if [[ ! -e "$original_file" ]]; then
+            if mv -- "$old_file" "$original_file"; then
+                printf '%bRestored an ISO left by an interrupted rebuild:%b %s\n' \
+                    "$YELLOW" "$RESET" "$original_file"
+            else
+                printf '%bCould not restore interrupted source ISO:%b %s\n' \
+                    "$RED" "$RESET" "$original_file" >&2
+                return 1
+            fi
+        fi
+    done < <(find "$INPUT_DIR" -type f -iname '*.iso.old' -print0)
+}
+
+rebuild_iso() {
+    local source_iso="$1" rebuilt_dir="$2"
+    local source_old="${source_iso}.old" source_size available_bytes rewrite_status=0
+
+    REBUILT_ISO=''
+    require_commands extract-xiso || return 1
+
+    if [[ -e "$source_old" ]]; then
+        printf '%bCannot rebuild while this recovery file exists:%b %s\n' \
+            "$RED" "$RESET" "$source_old" >&2
+        return 1
+    fi
+
+    source_size=$(stat -c '%s' -- "$source_iso") || return 1
+    available_bytes=$(df -PB1 -- "$OUTPUT_DIR" | awk 'NR == 2 {print $4}')
+    if [[ "$available_bytes" =~ ^[0-9]+$ ]] && (( available_bytes < source_size )); then
+        printf '%bNot enough free space for the temporary rebuilt ISO.%b\n' "$RED" "$RESET" >&2
+        printf 'Needed: %s bytes; available: %s bytes.\n' "$source_size" "$available_bytes" >&2
+        return 1
+    fi
+
+    mkdir -p -- "$rebuilt_dir"
+    ACTIVE_ORIGINAL="$source_iso"
+    ACTIVE_OLD="$source_old"
+    if extract-xiso -r "$source_iso" -d "$rebuilt_dir"; then
+        :
+    else
+        rewrite_status=$?
+    fi
+    restore_active_original || return 1
+
+    if (( rewrite_status != 0 )); then
+        printf '%bExtract-XISO could not rebuild:%b %s\n' \
+            "$RED" "$RESET" "$(basename -- "$source_iso")" >&2
+        return 1
+    fi
+
+    REBUILT_ISO=$(find "$rebuilt_dir" -type f -iname '*.iso' -print -quit)
+    if [[ -z "$REBUILT_ISO" ]]; then
+        REBUILT_ISO="$source_iso"
+        printf '%bISO is already rebuilt; converting it directly.%b\n' "$YELLOW" "$RESET"
+    fi
+}
+
 convert_iso_to_god() {
     local iso_file="$1"
-    local file_name title_id expected_target='' staging_root staged_output
+    local file_name title_id expected_target='' staging_root staged_output rebuilt_dir
     local title_dir actual_target
+    local conversion_source="$iso_file"
     local -a title_dirs=()
 
     file_name=$(basename -- "$iso_file")
@@ -84,11 +186,23 @@ convert_iso_to_god() {
     fi
     staging_root="$TEMP_DIR"
     staged_output="$staging_root/output"
+    rebuilt_dir="$staging_root/rebuilt"
     mkdir -p -- "$staged_output"
+
+    if [[ "$CONVERSION_MODE" == 'remove-all' ]]; then
+        printf '%bRemove all mode: rebuilding %s before conversion...%b\n' \
+            "$GREEN" "$file_name" "$RESET"
+        if ! rebuild_iso "$iso_file" "$rebuilt_dir"; then
+            ((++FAILED))
+            remove_temp_dir "$staging_root"
+            return 0
+        fi
+        conversion_source="$REBUILT_ISO"
+    fi
 
     printf '%b%s mode: converting %s with %s workers...%b\n' \
         "$GREEN" "${CONVERSION_MODE^}" "$file_name" "$THREADS" "$RESET"
-    if ! run_iso2god "$iso_file" "$staged_output"; then
+    if ! run_iso2god "$conversion_source" "$staged_output"; then
         ((++FAILED))
         printf '%bConversion failed:%b %s\n' "$RED" "$RESET" "$file_name" >&2
         remove_temp_dir "$staging_root"
@@ -130,6 +244,7 @@ process_iso_tree() {
     done < <(find "$search_root" -type f -iname '*.iso' -print0)
 }
 
+recover_interrupted_sources || exit 1
 if choose_conversion_mode; then
     :
 else

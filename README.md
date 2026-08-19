@@ -85,10 +85,11 @@ XEX Input/
 
 When using ISO2GOD, you'll be asked to choose a mode for the current batch:
 
-- **Compact** — uses iso2god-rs native trimming to reduce the size of the resulting GOD container.
-- **Fast** — converts without trimming, reducing the amount of processing required.
+- **Untouched** — standard conversion without trimming.
+- **Partial** — uses iso2god-rs native trimming (`--trim`) to reduce the resulting GOD container.
+- **Remove all** — rebuilds each ISO with `extract-xiso` before converting it to GOD. Rebuilt ISOs are temporary and are automatically deleted after conversion.
 
-The original ISO is not modified in either mode.
+The original ISO is restored after a rebuild, including if the process is interrupted. Remove all mode needs temporary free space at least equal to the source ISO size.
 
 ## Existing output handling
 
