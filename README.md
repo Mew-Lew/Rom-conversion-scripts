@@ -29,7 +29,7 @@ The installer uses Ubuntu through `proot-distro`. Root access is not required.
 Open Termux and run:
 
 ```bash
-pkg install -y curl && curl -fL --retry 3 https://raw.githubusercontent.com/Mew-Lew/Rom-conversion-scripts/v3.3.0/setup_complete_optimized.sh -o setup.sh && bash setup.sh
+pkg install -y curl && curl -fL --retry 3 https://raw.githubusercontent.com/Mew-Lew/Rom-conversion-scripts/v3.4.0/setup_complete_optimized.sh -o setup.sh && bash setup.sh
 ```
 
 This downloads and runs the installer.
