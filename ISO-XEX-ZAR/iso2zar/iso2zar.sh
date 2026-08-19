@@ -1,111 +1,74 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# This script utilizes extract-xiso downloaded from [https://github.com/XboxDev/extract-xiso/tree/master].
-# The license terms are detailed in the extract-xiso-license.txt file included in this repository.
+set -Eeuo pipefail
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
 
-# Input and output paths
-input_path="CHANGE/ME/INPUT/PATH"
-xex_output_path="CHANGE/ME/OUTPUT/XEX"
-zar_output_path="CHANGE/ME/OUTPUT/ZAR"
+INPUT_DIR="$ROM_ROOT/ISO Input"
+XEX_OUTPUT_DIR="$ROM_ROOT/XEX Output"
+ZAR_OUTPUT_DIR="$ROM_ROOT/ZAR Output"
+mkdir -p -- "$INPUT_DIR" "$XEX_OUTPUT_DIR" "$ZAR_OUTPUT_DIR"
+require_commands extract-xiso find mktemp unzip zarchive
 
-# Ensure output directories exist
-mkdir -p "$xex_output_path" "$zar_output_path"
-
-# Function to convert ISO to XEX
-convert_iso_to_xex() {
+convert_iso_to_zar() {
     local iso_file="$1"
-    local temp_dir="$2"
-    local file_name=$(basename -- "$iso_file")
-    local file_name_without_extension="${file_name%.*}"
-    local xex_output_dir="$xex_output_path/$file_name_without_extension"
+    local file_name base_name target staging_root xex_folder staged_zar
 
-    # Create directory for output files
-    mkdir -p "$xex_output_dir"
+    file_name=$(basename -- "$iso_file")
+    base_name="${file_name%.*}"
+    target="$ZAR_OUTPUT_DIR/$base_name.zar"
+    ((++ATTEMPTED))
 
-    # Perform the conversion
-    echo "Creating XEX file for $file_name..."
-    if ! extract-xiso -x "$iso_file" -d "$xex_output_dir"; then
-        echo "Failed to create XEX file for $file_name."
-        return 1
+    if ! prepare_output_target "$target" "$file_name"; then return 0; fi
+    if ! make_temp_dir "$XEX_OUTPUT_DIR/.iso2zar.XXXXXX"; then
+        ((++FAILED)); return 0
     fi
+    staging_root="$TEMP_DIR"
+    xex_folder="$staging_root/$base_name"
+    staged_zar="$staging_root/$base_name.zar"
+    mkdir -p -- "$xex_folder"
 
-    # Delete temporary directory containing extracted ISO files
-    if [ -d "$temp_dir" ]; then
-        rm -rf "$temp_dir"
-        echo "Temporary ISO directory $temp_dir deleted after extracting XEX."
-    fi
-
-    # Convert XEX to ZAR
-    convert_xex_to_zar "$xex_output_dir"
-}
-
-# Function to convert XEX to ZAR
-convert_xex_to_zar() {
-    local xex_folder="$1"
-    local folder_name=$(basename -- "$xex_folder")
-    local zar_file="$zar_output_path/$folder_name.zar"
-
-    # Check if the ZAR file already exists and remove it
-    if [ -f "$zar_file" ]; then
-        echo "The output file $zar_file already exists. Removing it."
-        rm -f "$zar_file"
-    fi
-
-    echo "Creating ZAR file for $folder_name..."
-    if ! zarchive "$xex_folder" "$zar_file"; then
-        echo "Failed to create ZAR file for $folder_name."
-        return 1
-    fi
-
-    echo "ZAR file $zar_file created successfully."
-    rm -rf "$xex_folder"
-    echo "XEX folder $folder_name deleted after conversion to ZAR."
-}
-
-# Check if the input path exists and is not empty
-if [ ! -d "$input_path" ]; then
-    echo "Input path $input_path does not exist."
-    exit 1
-elif [ -z "$(ls -A "$input_path")" ]; then
-    echo "Input path $input_path is empty."
-    exit 1
-fi
-
-# Process ISO files
-iso_files_found=false
-for iso_file in "$input_path"/*.iso; do
-    if [ -f "$iso_file" ]; then
-        iso_files_found=true
-        echo "Processing ISO file: $iso_file"
-        convert_iso_to_xex "$iso_file" ""
-    fi
-done
-
-# Process ZIP files
-zip_files_found=false
-for zip_file in "$input_path"/*.zip; do
-    if [ -f "$zip_file" ]; then
-        zip_files_found=true
-        temp_dir="$xex_output_path/temporary_$(basename -- "$zip_file" .zip)"
-        mkdir -p "$temp_dir"
-
-        echo "Extracting ZIP file $zip_file..."
-        if unzip -q "$zip_file" -d "$temp_dir"; then
-            for iso_file in "$temp_dir"/*.iso; do
-                if [ -f "$iso_file" ]; then
-                    convert_iso_to_xex "$iso_file" "$temp_dir"
-                fi
-            done
+    printf '%bExtracting XEX files for %s...%b\n' "$GREEN" "$file_name" "$RESET"
+    if extract-xiso -x "$iso_file" -d "$xex_folder"; then
+        printf '%bCreating ZAR for %s...%b\n' "$GREEN" "$file_name" "$RESET"
+        if zarchive "$xex_folder" "$staged_zar" &&
+           commit_staged_output "$staged_zar" "$target"; then
+            ((++SUCCEEDED))
+            printf '%bCreated:%b %s\n' "$GREEN" "$RESET" "$target"
         else
-            echo "Failed to extract ZIP file $zip_file."
-            rm -rf "$temp_dir"
-            echo "Temporary directory $temp_dir deleted due to extraction failure."
+            ((++FAILED))
+            printf '%bFailed to create ZAR:%b %s\n' "$RED" "$RESET" "$file_name" >&2
         fi
+    else
+        ((++FAILED))
+        printf '%bFailed to extract XEX files:%b %s\n' "$RED" "$RESET" "$file_name" >&2
     fi
-done
+    remove_temp_dir "$staging_root"
+}
 
-if [ "$iso_files_found" = false ] && [ "$zip_files_found" = false ]; then
-    echo "No ISO or ZIP files found in $input_path."
-fi
+process_iso_tree() {
+    local search_root="$1" iso_file
+    while IFS= read -r -d '' iso_file; do
+        convert_iso_to_zar "$iso_file"
+    done < <(find "$search_root" -type f -iname '*.iso' -print0)
+}
 
-echo "Processing completed."
+process_iso_tree "$INPUT_DIR"
+while IFS= read -r -d '' zip_file; do
+    if ! make_temp_dir "$XEX_OUTPUT_DIR/.iso2zar-zip.XXXXXX"; then
+        ((++ATTEMPTED)); ((++FAILED)); continue
+    fi
+    zip_temp="$TEMP_DIR"
+    printf '%bExtracting archive:%b %s\n' "$GREEN" "$RESET" "$zip_file"
+    if unzip -q -- "$zip_file" -d "$zip_temp"; then
+        process_iso_tree "$zip_temp"
+    else
+        ((++ATTEMPTED)); ((++FAILED))
+        printf '%bFailed to extract:%b %s\n' "$RED" "$RESET" "$zip_file" >&2
+    fi
+    remove_temp_dir "$zip_temp"
+done < <(find "$INPUT_DIR" -type f -iname '*.zip' -print0)
+
+(( ATTEMPTED > 0 )) || printf '%bNo ISO or ZIP contents were found.%b\n' "$YELLOW" "$RESET"
+if ! finish_with_summary; then exit 1; fi

@@ -1,62 +1,75 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# Directory containing input files for createdvd (ISO and BIN/CUE)
-INPUT_DIR="CHANGE/INPUT/PATH"
-# Output directory for CHD files
-OUTPUT_DIR="CHANGE/OUTPUT/PATH"
+set -Eeuo pipefail
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
 
-# Create output directory if it doesn't exist
-mkdir -p "$OUTPUT_DIR"
+INPUT_DIR="$ROM_ROOT/DVD Input"
+OUTPUT_DIR="$ROM_ROOT/DVD Output"
+mkdir -p -- "$INPUT_DIR" "$OUTPUT_DIR"
+require_commands chdman find mktemp unzip
 
-# Enable nullglob and globstar to handle cases with no files found and to support recursive globbing
-shopt -s nullglob globstar
+convert_dvd_image() {
+    local source_file="$1"
+    local file_name base_name extension target staging_root staged_chd
+    local conversion_succeeded=false
 
-# Function to process CUE files
-process_cue_files() {
-  for cue_file in "$1"/**/*.cue; do
-    if [ -e "$cue_file" ]; then
-      base_name=$(basename "$cue_file" .cue)
-      chd_file="$OUTPUT_DIR/$base_name.chd"
-      echo "Processing CUE file: $cue_file"
-      chdman createdvd -i "$iso_file" -o "$chd_file"
+    file_name=$(basename -- "$source_file")
+    base_name="${file_name%.*}"
+    extension="${file_name##*.}"
+    target="$OUTPUT_DIR/$base_name.chd"
+    ((++ATTEMPTED))
+
+    if ! prepare_output_target "$target" "$file_name"; then return 0; fi
+    if ! make_temp_dir "$OUTPUT_DIR/.chddvd.XXXXXX"; then
+        ((++FAILED)); return 0
     fi
-  done
+    staging_root="$TEMP_DIR"
+    staged_chd="$staging_root/$base_name.chd"
+
+    printf '%bCreating DVD CHD from %s...%b\n' "$GREEN" "$file_name" "$RESET"
+    if [[ "${extension,,}" == 'iso' ]]; then
+        if chdman createdvd -hs 2048 -i "$source_file" -o "$staged_chd"; then
+            conversion_succeeded=true
+        fi
+    elif chdman createdvd -i "$source_file" -o "$staged_chd"; then
+        conversion_succeeded=true
+    fi
+
+    if [[ "$conversion_succeeded" == true ]] &&
+       commit_staged_output "$staged_chd" "$target"; then
+        ((++SUCCEEDED))
+        printf '%bCreated:%b %s\n' "$GREEN" "$RESET" "$target"
+    else
+        ((++FAILED))
+        printf '%bFailed:%b %s\n' "$RED" "$RESET" "$file_name" >&2
+    fi
+    remove_temp_dir "$staging_root"
 }
 
-# Function to process ISO files
-process_iso_files() {
-  for iso_file in "$1"/**/*.iso; do
-    if [ -e "$iso_file" ]; then
-      base_name=$(basename "$iso_file" .iso)
-      chd_file="$OUTPUT_DIR/$base_name.chd"
-      echo "Processing ISO file: $iso_file"
-      chdman createdvd -hs 2048 -i "$iso_file" -o "$chd_file"
-    fi
-  done
+process_dvd_tree() {
+    local search_root="$1" source_file
+    while IFS= read -r -d '' source_file; do
+        convert_dvd_image "$source_file"
+    done < <(find "$search_root" -type f \( -iname '*.cue' -o -iname '*.iso' \) -print0)
 }
 
-# Process unzipped files in the INPUT_DIR and its subdirectories
-process_cue_files "$INPUT_DIR"
-process_iso_files "$INPUT_DIR"
+process_dvd_tree "$INPUT_DIR"
+while IFS= read -r -d '' zip_file; do
+    if ! make_temp_dir "$OUTPUT_DIR/.chddvd-zip.XXXXXX"; then
+        ((++ATTEMPTED)); ((++FAILED)); continue
+    fi
+    zip_temp="$TEMP_DIR"
+    printf '%bExtracting archive:%b %s\n' "$GREEN" "$RESET" "$zip_file"
+    if unzip -q -- "$zip_file" -d "$zip_temp"; then
+        process_dvd_tree "$zip_temp"
+    else
+        ((++ATTEMPTED)); ((++FAILED))
+        printf '%bFailed to extract:%b %s\n' "$RED" "$RESET" "$zip_file" >&2
+    fi
+    remove_temp_dir "$zip_temp"
+done < <(find "$INPUT_DIR" -type f -iname '*.zip' -print0)
 
-# Process ZIP archives
-for zip_file in "$INPUT_DIR"/**/*.zip; do
-  if [ -e "$zip_file" ]; then
-    temp_dir="$OUTPUT_DIR/$(basename "$zip_file" .zip)"
-    mkdir -p "$temp_dir"
-    echo "Extracting: $zip_file"
-    unzip -q "$zip_file" -d "$temp_dir"
-
-    # Process extracted files
-    process_cue_files "$temp_dir"
-    process_iso_files "$temp_dir"
-
-    rm -rf "$temp_dir"
-    echo "Temporary folder $temp_dir successfully deleted."
-  fi
-done
-
-# Check if no files were processed and print a message
-if [ ! "$(find "$INPUT_DIR" -type f \( -name '*.cue' -o -name '*.iso' -o -name '*.zip' \) -print -quit)" ]; then
-  echo "No CUE, ISO, or ZIP files found in $INPUT_DIR or its subdirectories"
-fi
+(( ATTEMPTED > 0 )) || printf '%bNo CUE, ISO or ZIP contents were found.%b\n' "$YELLOW" "$RESET"
+if ! finish_with_summary; then exit 1; fi

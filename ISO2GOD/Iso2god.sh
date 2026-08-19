@@ -1,109 +1,159 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# This script utilizes extract-xiso downloaded from [https://github.com/XboxDev/extract-xiso/tree/master].
-# The license terms are detailed in the extract-xiso-license.txt file included in this repository.
+set -Eeuo pipefail
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
 
-# Input and output paths
-input_path="CHANGE/INPUT/PATH"
-output_path="CHANGE/OUTPUT/PATH"
+INPUT_DIR="$ROM_ROOT/ISO2GOD Input"
+OUTPUT_DIR="$ROM_ROOT/ISO2GOD Output"
+ISO2GOD_BIN="${ISO2GOD_BIN:-/usr/local/bin/iso2god}"
+THREADS="${ISO2GOD_THREADS:-2}"
+CONVERSION_MODE="${ISO2GOD_MODE:-}"
 
-# Check if the output directory exists, if not, create it
-mkdir -p "$output_path"
+mkdir -p -- "$INPUT_DIR" "$OUTPUT_DIR"
+require_commands "$ISO2GOD_BIN" find mktemp unzip
 
-# Flag to track if any files were processed
-files_processed=false
+case "$THREADS" in
+    ''|*[!0-9]*|0)
+        printf '%bInvalid ISO2GOD_THREADS value; using 2.%b\n' "$YELLOW" "$RESET"
+        THREADS=2
+        ;;
+esac
 
-# Prompt to keep or delete rebuilt ISO files
-echo -e "\e[32mWould you like to KEEP the rebuilt ISO files?\e[0m
-\e[33m1) Yes\e[0m
-\e[35m2) No\e[0m
-\e[31m3) Cancel conversion\e[0m"
+choose_conversion_mode() {
+    local choice
+    CONVERSION_MODE="${CONVERSION_MODE,,}"
+    case "$CONVERSION_MODE" in
+        compact|fast) return 0 ;;
+        '') ;;
+        *)
+            printf '%bISO2GOD_MODE must be compact or fast.%b\n' "$RED" "$RESET" >&2
+            return 2
+            ;;
+    esac
 
-# Prompt for input
-read -p $'Enter your choice (1-3): ' choice
+    while true; do
+        echo
+        printf '%bISO2GOD conversion mode%b\n' "$GREEN" "$RESET"
+        echo '1) Compact  Smaller output using ISO2GOD native trimming'
+        echo '2) Fast     Quicker conversion without trimming'
+        echo '3) Cancel'
+        read -r -p 'Select a mode [1-3]: ' choice
+        case "$choice" in
+            1) CONVERSION_MODE='compact'; return 0 ;;
+            2) CONVERSION_MODE='fast'; return 0 ;;
+            3) return 130 ;;
+            *) printf '%bInvalid choice.%b\n' "$RED" "$RESET" ;;
+        esac
+    done
+}
 
-# Validate input
-while [[ "$choice" != "1" && "$choice" != "2" && "$choice" != "3" ]]; do
-    echo -e "\e[31mInvalid input. Please enter '1', '2', or '3'.\e[0m"
-    read -p $'Enter your choice (1-3): ' choice
-done
-
-# If chooses to cancel
-if [ "$choice" == "3" ]; then
-    echo -e "\e[31mConversion cancelled.\e[0m"
-    exit 0
-fi
-
-# Function to rewrite ISO using extract-xiso
-rewrite_iso() {
+read_title_id() {
     local iso_file="$1"
-    local file_name=$(basename -- "$iso_file")
+    "$ISO2GOD_BIN" --dry-run "$iso_file" "$OUTPUT_DIR" 2>/dev/null |
+        awk '/^[[:space:]]*Title ID:/ {print $3; exit}'
+}
 
-    # Perform the rewrite
-    extract-xiso -r "$iso_file" -d "$input_path"
-    if [ $? -eq 0 ]; then
-        local rewritten_iso="$input_path/$file_name"
-        convert_to_god "$rewritten_iso"
+run_iso2god() {
+    local iso_file="$1" destination="$2"
+    if [[ "$CONVERSION_MODE" == 'compact' ]]; then
+        "$ISO2GOD_BIN" --trim -j "$THREADS" "$iso_file" "$destination"
     else
-        echo -e "\e[31mFailed to rewrite ISO file $file_name.\e[0m"
+        "$ISO2GOD_BIN" -j "$THREADS" "$iso_file" "$destination"
     fi
 }
 
-# Function to convert rebuilt ISO to GOD
-convert_to_god() {
-    local rewritten_iso="$1"
-    local file_name=$(basename -- "$rewritten_iso")
+convert_iso_to_god() {
+    local iso_file="$1"
+    local file_name title_id expected_target='' staging_root staged_output
+    local title_dir actual_target
+    local -a title_dirs=()
 
-    echo "Converting rebuilt ISO file $file_name to GOD..."
-    (cd && ./iso2god-rs/target/release/iso2god "$rewritten_iso" "$output_path")
-    if [ $? -eq 0 ]; then
-        echo -e "\e[32mGOD file for $file_name created successfully.\e[0m"
-        # Delete rebuilt ISO if chose not to keep it
-        if [ "$choice" == "2" ]; then
-            rm -f "$rewritten_iso"
-            echo -e "\e[32mRebuilt ISO file $file_name deleted.\e[0m"
+    file_name=$(basename -- "$iso_file")
+    ((++ATTEMPTED))
+
+    title_id=$(read_title_id "$iso_file" || true)
+    if [[ "$title_id" =~ ^[[:xdigit:]]{8}$ ]]; then
+        expected_target="$OUTPUT_DIR/${title_id^^}"
+        if ! prepare_output_target "$expected_target" "$file_name"; then return 0; fi
+    fi
+
+    if ! make_temp_dir "$OUTPUT_DIR/.iso2god-stage.XXXXXX"; then
+        ((++FAILED)); return 0
+    fi
+    staging_root="$TEMP_DIR"
+    staged_output="$staging_root/output"
+    mkdir -p -- "$staged_output"
+
+    printf '%b%s mode: converting %s with %s workers...%b\n' \
+        "$GREEN" "${CONVERSION_MODE^}" "$file_name" "$THREADS" "$RESET"
+    if ! run_iso2god "$iso_file" "$staged_output"; then
+        ((++FAILED))
+        printf '%bConversion failed:%b %s\n' "$RED" "$RESET" "$file_name" >&2
+        remove_temp_dir "$staging_root"
+        return 0
+    fi
+
+    mapfile -d '' -t title_dirs < <(find "$staged_output" -mindepth 1 -maxdepth 1 -type d -print0)
+    if (( ${#title_dirs[@]} != 1 )); then
+        ((++FAILED))
+        printf '%bISO2GOD produced %s title directories; expected exactly one:%b %s\n' \
+            "$RED" "${#title_dirs[@]}" "$RESET" "$file_name" >&2
+        remove_temp_dir "$staging_root"
+        return 0
+    fi
+
+    title_dir="${title_dirs[0]}"
+    actual_target="$OUTPUT_DIR/$(basename -- "$title_dir")"
+    if [[ -z "$expected_target" || "$actual_target" != "$expected_target" ]]; then
+        if ! prepare_output_target "$actual_target" "$file_name"; then
+            remove_temp_dir "$staging_root"
+            return 0
         fi
-    else
-        echo -e "\e[31mFailed to convert $file_name to GOD.\e[0m"
     fi
+
+    if commit_staged_output "$title_dir" "$actual_target"; then
+        ((++SUCCEEDED))
+        printf '%bCreated:%b %s\n' "$GREEN" "$RESET" "$actual_target"
+    else
+        ((++FAILED))
+        printf '%bFailed to commit GOD output:%b %s\n' "$RED" "$RESET" "$file_name" >&2
+    fi
+    remove_temp_dir "$staging_root"
 }
 
-# Loop through each ISO file in the input directory
-for iso_file in "$input_path"/*.iso; do
-    if [ -f "$iso_file" ]; then
-        rewrite_iso "$iso_file"
-        files_processed=true
-    fi
-done
+process_iso_tree() {
+    local search_root="$1" iso_file
+    while IFS= read -r -d '' iso_file; do
+        convert_iso_to_god "$iso_file"
+    done < <(find "$search_root" -type f -iname '*.iso' -print0)
+}
 
-# Loop through each ZIP file in the input directory
-for zip_file in "$input_path"/*.zip; do
-    if [ -f "$zip_file" ]; then
-        # Create a temporary directory in the output path for extraction
-        temp_dir="$output_path/temporary"
-        mkdir -p "$temp_dir"
-
-        # Unzip the file
-        echo "Extracting ZIP file $zip_file..."
-        unzip -q "$zip_file" -d "$temp_dir"
-
-        # Find all ISO files in the unzipped content and rewrite them
-        for iso_file in "$temp_dir"/*.iso; do
-            if [ -f "$iso_file" ]; then
-                rewrite_iso "$iso_file"
-                files_processed=true
-            fi
-        done
-
-        # Clean up temporary directory
-        rm -rf "$temp_dir"
-        echo -e "\e[32mTemporary folder for unzipped ISOs was deleted successfully.\e[0m"
-    fi
-done
-
-# Check if any files were processed
-if [ "$files_processed" = false ]; then
-    echo -e "\e[31mNo ISO or ZIP files found to rewrite in the input directory.\e[0m"
+if choose_conversion_mode; then
+    :
 else
-    echo -e "\e[32mAll ISO files have been rebuilt and converted to GOD.\e[0m"
+    mode_status=$?
+    if (( mode_status == 130 )); then echo 'Cancelled.'; exit 0; fi
+    exit "$mode_status"
 fi
+printf '%bUsing %s mode for every ISO in this run.%b\n' "$GREEN" "$CONVERSION_MODE" "$RESET"
+
+process_iso_tree "$INPUT_DIR"
+while IFS= read -r -d '' zip_file; do
+    if ! make_temp_dir "$OUTPUT_DIR/.iso2god-zip.XXXXXX"; then
+        ((++ATTEMPTED)); ((++FAILED)); continue
+    fi
+    zip_temp="$TEMP_DIR"
+    printf '%bExtracting archive:%b %s\n' "$GREEN" "$RESET" "$zip_file"
+    if unzip -q -- "$zip_file" -d "$zip_temp"; then
+        process_iso_tree "$zip_temp"
+    else
+        ((++ATTEMPTED)); ((++FAILED))
+        printf '%bFailed to extract:%b %s\n' "$RED" "$RESET" "$zip_file" >&2
+    fi
+    remove_temp_dir "$zip_temp"
+done < <(find "$INPUT_DIR" -type f -iname '*.zip' -print0)
+
+(( ATTEMPTED > 0 )) || printf '%bNo ISO or ZIP contents were found.%b\n' "$YELLOW" "$RESET"
+if ! finish_with_summary; then exit 1; fi

@@ -1,69 +1,66 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# This script utilizes extract-xiso downloaded from [https://github.com/XboxDev/extract-xiso/tree/master].
-# The license terms are detailed in the extract-xiso-license.txt file included in this repository.
+set -Eeuo pipefail
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
 
-# Input and output paths
-input_path="CHANGE/ME/INPUT/PATH"
-output_path="CHANGE/ME/OUTPUT/PATH"
+INPUT_DIR="$ROM_ROOT/ISO Input"
+OUTPUT_DIR="$ROM_ROOT/XEX Output"
+mkdir -p -- "$INPUT_DIR" "$OUTPUT_DIR"
+require_commands extract-xiso find mktemp unzip
 
-# Check if the output directory exists, if not, create it
-mkdir -p "$output_path"
-
-# Flag to track if any files were processed
-files_processed=false
-
-# Function to convert ISO to XEX
 convert_iso_to_xex() {
     local iso_file="$1"
-    local file_name=$(basename -- "$iso_file")
-    local file_name_without_extension="${file_name%.*}"
-    
-    # Create directory for output files
-    local iso_output_dir="$output_path/$file_name_without_extension"
-    mkdir -p "$iso_output_dir"
-    
-    # Perform the conversion
-    echo "Creating XEX file for $file_name..."
-    extract-xiso -x "$iso_file" -d "$iso_output_dir"
+    local file_name base_name target staging_root staged_output
+
+    file_name=$(basename -- "$iso_file")
+    base_name="${file_name%.*}"
+    target="$OUTPUT_DIR/$base_name"
+    ((++ATTEMPTED))
+
+    if ! prepare_output_target "$target" "$file_name"; then return 0; fi
+    if ! make_temp_dir "$OUTPUT_DIR/.iso2xex.XXXXXX"; then
+        ((++FAILED)); return 0
+    fi
+    staging_root="$TEMP_DIR"
+    staged_output="$staging_root/$base_name"
+    mkdir -p -- "$staged_output"
+
+    printf '%bExtracting %s...%b\n' "$GREEN" "$file_name" "$RESET"
+    if extract-xiso -x "$iso_file" -d "$staged_output" &&
+       commit_staged_output "$staged_output" "$target"; then
+        ((++SUCCEEDED))
+        printf '%bCreated:%b %s\n' "$GREEN" "$RESET" "$target"
+    else
+        ((++FAILED))
+        printf '%bFailed:%b %s\n' "$RED" "$RESET" "$file_name" >&2
+    fi
+    remove_temp_dir "$staging_root"
 }
 
-# Loop through each ISO file in the input directory
-for iso_file in "$input_path"/*.iso; do
-    if [ -f "$iso_file" ]; then
+process_iso_tree() {
+    local search_root="$1" iso_file
+    while IFS= read -r -d '' iso_file; do
         convert_iso_to_xex "$iso_file"
-        files_processed=true
+    done < <(find "$search_root" -type f -iname '*.iso' -print0)
+}
+
+process_iso_tree "$INPUT_DIR"
+while IFS= read -r -d '' zip_file; do
+    if ! make_temp_dir "$OUTPUT_DIR/.iso2xex-zip.XXXXXX"; then
+        ((++ATTEMPTED)); ((++FAILED)); continue
     fi
-done
-
-# Loop through each ZIP file in the input directory
-for zip_file in "$input_path"/*.zip; do
-    if [ -f "$zip_file" ]; then
-        # Create a temporary directory in the output path for extraction
-        temp_dir="$output_path/temporary"
-        mkdir -p "$temp_dir"
-
-        # Unzip the file
-        echo "Extracting ZIP file $zip_file..."
-        unzip -q "$zip_file" -d "$temp_dir"
-
-        # Find all ISO files in the unzipped content and convert them
-        for iso_file in "$temp_dir"/*.iso; do
-            if [ -f "$iso_file" ]; then
-                convert_iso_to_xex "$iso_file"
-                files_processed=true
-            fi
-        done
-
-        # Clean up temporary directory
-        rm -rf "$temp_dir"
-        echo "Temporary folder for unzipped ISOs was deleted successfully."
+    zip_temp="$TEMP_DIR"
+    printf '%bExtracting archive:%b %s\n' "$GREEN" "$RESET" "$zip_file"
+    if unzip -q -- "$zip_file" -d "$zip_temp"; then
+        process_iso_tree "$zip_temp"
+    else
+        ((++ATTEMPTED)); ((++FAILED))
+        printf '%bFailed to extract:%b %s\n' "$RED" "$RESET" "$zip_file" >&2
     fi
-done
+    remove_temp_dir "$zip_temp"
+done < <(find "$INPUT_DIR" -type f -iname '*.zip' -print0)
 
-# Check if any files were processed
-if [ "$files_processed" = false ]; then
-    echo "No ISO or ZIP files found to convert in the input directory."
-else
-    echo "All ISO files have been processed."
-fi
+(( ATTEMPTED > 0 )) || printf '%bNo ISO or ZIP contents were found.%b\n' "$YELLOW" "$RESET"
+if ! finish_with_summary; then exit 1; fi

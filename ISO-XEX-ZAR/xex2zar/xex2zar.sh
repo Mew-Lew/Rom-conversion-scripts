@@ -1,33 +1,47 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-input_path="CHANGE/ME/INPUT/PATH"
-output_path="CHANGE/ME/OUTPUT/PATH"
+set -Eeuo pipefail
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=common.sh
+source "$SCRIPT_DIR/common.sh"
 
-# Check if input_path exists
-if [ ! -d "$input_path" ]; then
-    echo "Error: Input path does not exist"
-    exit 1
-fi
+INPUT_DIR="$ROM_ROOT/XEX Input"
+OUTPUT_DIR="$ROM_ROOT/ZAR Output"
+mkdir -p -- "$INPUT_DIR" "$OUTPUT_DIR"
+require_commands mktemp zarchive
 
-# Check if output_path exists, if not create it
-if [ ! -d "$output_path" ]; then
-    mkdir -p "$output_path"
-fi
+convert_xex_folder() {
+    local folder="$1"
+    local folder_name target staging_root staged_zar
 
-# Loop through each folder in input_path
-for folder in "$input_path"/*; do
-    if [ -d "$folder" ]; then
-        echo "Converting folder: $(basename "$folder")"
-        zarchive "$folder" "$output_path/$(basename "$folder").zar"
-        if [ $? -eq 0 ]; then
-            echo "Successfully converted $(basename "$folder") to zar file"
-        else
-            echo "Error: Failed to convert $(basename "$folder")"
-        fi
+    folder_name=$(basename -- "$folder")
+    target="$OUTPUT_DIR/$folder_name.zar"
+    ((++ATTEMPTED))
+
+    if ! prepare_output_target "$target" "$folder_name"; then return 0; fi
+    if ! make_temp_dir "$OUTPUT_DIR/.xex2zar.XXXXXX"; then
+        ((++FAILED)); return 0
     fi
-done
+    staging_root="$TEMP_DIR"
+    staged_zar="$staging_root/$folder_name.zar"
 
-# Check if there's nothing to convert
-if [ -z "$(ls -A "$input_path")" ]; then
-    echo "Nothing to convert in the input path"
-fi
+    printf '%bCreating ZAR for %s...%b\n' "$GREEN" "$folder_name" "$RESET"
+    if zarchive "$folder" "$staged_zar" &&
+       commit_staged_output "$staged_zar" "$target"; then
+        ((++SUCCEEDED))
+        printf '%bCreated:%b %s\n' "$GREEN" "$RESET" "$target"
+    else
+        ((++FAILED))
+        printf '%bFailed:%b %s\n' "$RED" "$RESET" "$folder_name" >&2
+    fi
+    remove_temp_dir "$staging_root"
+}
+
+shopt -s nullglob
+for folder in "$INPUT_DIR"/*; do
+    [[ -d "$folder" ]] && convert_xex_folder "$folder"
+done
+shopt -u nullglob
+
+(( ATTEMPTED > 0 )) || printf '%bNo XEX folders were found.%b\n' "$YELLOW" "$RESET"
+if ! finish_with_summary; then exit 1; fi
